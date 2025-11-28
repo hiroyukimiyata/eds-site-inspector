@@ -57,6 +57,7 @@
     codeTree: null,
     mediaFiles: null,
     ssrDocument: null,
+    icons: [], // アイコンの一覧
   };
 
   function createOverlayRoot() {
@@ -166,6 +167,62 @@
     return blockNames;
   }
 
+  function collectIconNames() {
+    const iconMap = new Map(); // iconName -> url
+    const addFromUrl = (urlString) => {
+      try {
+        const { pathname, origin } = new URL(urlString, window.location.href);
+        // ルート位置からの /icons/{icon-name} というパターンを検出
+        // パスの途中に /icons/ が含まれる場合は除外
+        if (!pathname.startsWith('/icons/')) {
+          return;
+        }
+        const match = pathname.match(/^\/icons\/([^/]+)/);
+        if (match && match[1]) {
+          // ファイル拡張子を除去（例: arrow.svg -> arrow, icon-arrow.svg -> icon-arrow）
+          let iconName = match[1].replace(/\.(svg|png|jpg|jpeg|gif|webp)$/i, '');
+          // icon- プレフィックスを除去（例: icon-arrow -> arrow）
+          if (iconName.startsWith('icon-')) {
+            iconName = iconName.replace(/^icon-/, '');
+          }
+          // 完全なURLを保存
+          const fullUrl = `${origin}${pathname}`;
+          iconMap.set(iconName, fullUrl);
+          console.log('[EDS Inspector] Found icon resource:', iconName, 'from URL:', urlString);
+        }
+      } catch (e) {
+        /* noop */
+      }
+    };
+
+    // Performance APIからネットワークリクエストを収集
+    performance.getEntriesByType('resource').forEach((entry) => {
+      addFromUrl(entry.name);
+    });
+    
+    // DOMからlink/script/imgタグのURLを収集
+    document.querySelectorAll('link[href*="/icons/"], script[src*="/icons/"], img[src*="/icons/"]').forEach((el) => {
+      const url = el.getAttribute('href') || el.getAttribute('src');
+      if (url) addFromUrl(url);
+    });
+    
+    // ネットワークリクエストを監視（既に読み込まれたリソースも含む）
+    // 追加のリクエストをキャッチするため、PerformanceObserverも使用
+    try {
+      const observer = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          if (entry.name) addFromUrl(entry.name);
+        });
+      });
+      observer.observe({ entryTypes: ['resource'] });
+    } catch (e) {
+      // PerformanceObserverがサポートされていない場合は無視
+    }
+    
+    console.log('[EDS Inspector] Collected icon names:', Array.from(iconMap.keys()));
+    return iconMap;
+  }
+
   function detectSections(mainSSR, mainLive) {
     const sections = [];
     const seenElements = new Set();
@@ -210,35 +267,27 @@
       const sectionMetadata = ssrChild.querySelector('.section-metadata');
       if (sectionMetadata) {
         // Section Metadataからラベルを抽出
-        const styleCell = sectionMetadata.querySelector('div > div:first-child');
-        if (styleCell) {
-          sectionLabel = styleCell.textContent.trim();
+        // 2つ目の<div>のテキストを取得（例: "content"）
+        const metadataContainer = sectionMetadata.querySelector('div > div');
+        if (metadataContainer) {
+          const metadataCells = Array.from(metadataContainer.children);
+          if (metadataCells.length >= 2) {
+            // 2つ目の<div>のテキストを取得
+            const secondCell = metadataCells[1];
+            const labelText = secondCell.textContent.trim();
+            if (labelText) {
+              sectionLabel = labelText;
+            }
+          }
         }
       }
       
-      // data-section-id属性を確認
-      if (!sectionLabel && ssrChild.hasAttribute('data-section-id')) {
-        sectionLabel = ssrChild.getAttribute('data-section-id');
-      }
-      
-      // クラス名からラベルを抽出
-      if (!sectionLabel) {
-        const classes = Array.from(ssrChild.classList);
-        const sectionClass = classes.find(cls => cls.startsWith('section-') && cls !== 'section-metadata');
-        if (sectionClass) {
-          sectionLabel = sectionClass;
-        }
-      }
-      
-      // デフォルトラベル
-      if (!sectionLabel) {
-        sectionLabel = `section-${sections.length + 1}`;
-      }
+      // section-metadataがない場合は、ラベルをnullのままにする（表示時に"Section:"のみ表示）
       
       sections.push({ 
         id: `section-${sections.length}`, 
         element: liveElement, 
-        label: sectionLabel 
+        label: sectionLabel // nullの場合は名前部分を省略
       });
       
       console.log('[EDS Inspector] Detected section:', sectionLabel, 'element:', liveElement);
@@ -307,6 +356,9 @@
     // ネットワークリクエストから収集したブロック名を優先的に使用
     // ライブDOMで直接クラス名で検索する（パスベースの検出は信頼性が低いため）
     blockResources.forEach((blockName) => {
+      // iconはBlockとして検出しない（Iconsタブで別途表示）
+      if (blockName === 'icon' || blockName.startsWith('icon-')) return;
+      
       // ライブDOMでブロッククラスを持つ要素を直接検索
       try {
         const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
@@ -365,6 +417,9 @@
     ssrBlockClasses.forEach((blockName) => {
       if (blockResources.has(blockName)) return; // 既に検出済み
       
+      // iconはBlockとして検出しない（Iconsタブで別途表示）
+      if (blockName === 'icon' || blockName.startsWith('icon-')) return;
+      
       try {
         const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
         liveElements.forEach((liveElement) => {
@@ -421,9 +476,18 @@
     
     DEFAULT_CONTENT_MAP.forEach((contentDef) => {
       // SSRマークアップから該当する要素を検出
-      const ssrElements = mainSSR.querySelectorAll(contentDef.selector);
+      let ssrElements;
+      try {
+        ssrElements = mainSSR.querySelectorAll(contentDef.selector);
+      } catch (e) {
+        // セレクタが無効な場合（例: span.icon）はスキップ
+        console.warn('[EDS Inspector] Invalid selector:', contentDef.selector, e);
+        return;
+      }
+      
       ssrElements.forEach((ssrEl) => {
         if (!(ssrEl instanceof HTMLElement)) return;
+        
         
         // textブロック（<p>タグ）内の要素は検出しない
         // codeやlinkなどは、<p>タグ内にある場合はオーバーレイ表示を省略
@@ -607,6 +671,180 @@
     return blocks;
   }
 
+  async function detectIcons(mainSSR, mainLive, iconResources) {
+    const icons = [];
+    const seenElements = new Set();
+    const seenIconNames = new Set();
+    
+    // ネットワークリクエストから検出したアイコン名を優先的に使用
+    for (const [iconName, iconUrl] of iconResources.entries()) {
+      // Live DOMでアイコン要素を検索
+      // アイコンは通常 <span class="icon icon-{name}"> または <span class="icon-{name}"> の形式
+      const selectors = [
+        `span.icon-${CSS.escape(iconName)}`,
+        `span.icon.icon-${CSS.escape(iconName)}`,
+        `span[class*="icon-${CSS.escape(iconName)}"]`,
+      ];
+      
+      let found = false;
+      for (const selector of selectors) {
+        try {
+          const liveIcons = mainLive.querySelectorAll(selector);
+          for (const liveIcon of liveIcons) {
+            if (seenElements.has(liveIcon)) continue;
+            seenElements.add(liveIcon);
+            found = true;
+            
+            const classes = liveIcon.className || '';
+            // アイコン名は icon-{name} の形式（例: icon-arrow）
+            const iconClassName = `icon-${iconName}`;
+            
+            // SVGの内容を取得（DOM要素から）
+            let svgContent = '';
+            const svg = liveIcon.querySelector('svg');
+            if (svg) {
+              // SVGをクローンして、サイズ属性を追加
+              const svgClone = svg.cloneNode(true);
+              svgClone.setAttribute('width', '48');
+              svgClone.setAttribute('height', '48');
+              svgClone.style.width = '48px';
+              svgClone.style.height = '48px';
+              svgContent = svgClone.outerHTML;
+            } else {
+              // DOM要素にSVGがない場合は、ネットワークリクエストのURLから取得を試みる
+              try {
+                const response = await fetch(iconUrl);
+                if (response.ok) {
+                  const svgText = await response.text();
+                  // SVGテキストをパースして、サイズ属性を追加
+                  const parser = new DOMParser();
+                  const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+                  const svgElement = svgDoc.querySelector('svg');
+                  if (svgElement) {
+                    svgElement.setAttribute('width', '48');
+                    svgElement.setAttribute('height', '48');
+                    svgElement.style.width = '48px';
+                    svgElement.style.height = '48px';
+                    svgContent = svgElement.outerHTML;
+                  }
+                }
+              } catch (e) {
+                console.warn('[EDS Inspector] Failed to fetch icon SVG:', iconUrl, e);
+              }
+            }
+            
+            icons.push({
+              id: `icon-${icons.length}`,
+              element: liveIcon,
+              name: iconClassName,
+              classes: classes,
+              svg: svgContent,
+              url: iconUrl,
+            });
+          }
+        } catch (e) {
+          console.warn('[EDS Inspector] Error querying for icon:', iconName, e);
+        }
+      }
+      
+      // DOM要素が見つからない場合でも、ネットワークリクエストから検出したアイコンを追加
+      if (!found && !seenIconNames.has(iconName)) {
+        seenIconNames.add(iconName);
+        
+        // SVGをネットワークリクエストのURLから取得
+        let svgContent = '';
+        try {
+          const response = await fetch(iconUrl);
+          if (response.ok) {
+            const svgText = await response.text();
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+            const svgElement = svgDoc.querySelector('svg');
+            if (svgElement) {
+              svgElement.setAttribute('width', '48');
+              svgElement.setAttribute('height', '48');
+              svgElement.style.width = '48px';
+              svgElement.style.height = '48px';
+              svgContent = svgElement.outerHTML;
+            }
+          }
+        } catch (e) {
+          console.warn('[EDS Inspector] Failed to fetch icon SVG:', iconUrl, e);
+        }
+        
+        icons.push({
+          id: `icon-${icons.length}`,
+          element: null,
+          name: `icon-${iconName}`,
+          classes: '',
+          svg: svgContent,
+          url: iconUrl,
+        });
+      }
+    }
+    
+    // ネットワークリクエストに存在しないアイコンも検出（DOMから直接）
+    const iconSelectors = [
+      'span.icon',
+      'span[class*="icon-"]',
+    ];
+    
+    for (const selector of iconSelectors) {
+      const liveIcons = mainLive.querySelectorAll(selector);
+      for (const liveIcon of liveIcons) {
+        if (seenElements.has(liveIcon)) continue;
+        seenElements.add(liveIcon);
+        
+        // アイコン名を取得（クラス名から）
+        const classes = liveIcon.className || '';
+        // icon-で始まるクラス名を探す
+        const iconClass = classes.split(' ').find(cls => cls.startsWith('icon-'));
+        // アイコン名は完全なクラス名（例: icon-arrow）
+        const iconName = iconClass || (classes.includes('icon') ? 'icon' : 'icon');
+        
+        // 既に検出済みのアイコン名はスキップ
+        if (seenIconNames.has(iconName.replace('icon-', ''))) continue;
+        
+        // SVGの内容を取得
+        const svg = liveIcon.querySelector('svg');
+        let svgContent = '';
+        if (svg) {
+          // SVGをクローンして、サイズ属性を追加
+          const svgClone = svg.cloneNode(true);
+          svgClone.setAttribute('width', '48');
+          svgClone.setAttribute('height', '48');
+          svgClone.style.width = '48px';
+          svgClone.style.height = '48px';
+          svgContent = svgClone.outerHTML;
+        }
+        
+        icons.push({
+          id: `icon-${icons.length}`,
+          element: liveIcon,
+          name: iconName,
+          classes: classes,
+          svg: svgContent,
+          url: null,
+        });
+      }
+    }
+    
+    // 重複を削除（同じname）
+    const uniqueIcons = [];
+    const seenKeys = new Set();
+    icons.forEach((icon) => {
+      const key = icon.name;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueIcons.push(icon);
+      }
+    });
+    
+    console.log('[EDS Inspector] Detected icons:', uniqueIcons.map(i => ({ name: i.name, url: i.url })));
+    
+    return uniqueIcons;
+  }
+
   function createOverlayElement(item, type) {
     const el = document.createElement('div');
     
@@ -628,7 +866,12 @@
     label.className = 'eds-overlay__label';
     
     if (type === 'section') {
-      label.textContent = `Section: ${item.label}`;
+      // section-metadataがある場合は"Section: {label}"、ない場合は"Section"のみ
+      if (item.label) {
+        label.textContent = `Section: ${item.label}`;
+      } else {
+        label.textContent = 'Section';
+      }
     } else {
       // ブロックのカテゴリに基づいて、BlockかDefault Contentかを判断
       const isDefaultContent = item.category && item.category !== 'block';
@@ -738,6 +981,13 @@
         tagName: block.tagName, 
         classes: block.classes,
         category: block.category || 'block'
+      })),
+      icons: state.icons.map((icon) => ({
+        id: icon.id,
+        name: icon.name,
+        classes: icon.classes,
+        svg: icon.svg,
+        url: icon.url,
       })),
       overlaysEnabled: { ...state.overlaysEnabled },
       selectedBlock: state.selectedBlockId,
@@ -913,11 +1163,30 @@
     const ssrDoc = (state.ssrDocument = (await parseSSRDocument()) || document);
     const mainSSR = ssrDoc.querySelector('main') || document.querySelector('main');
     const blockResources = collectBlockResourceNames();
+    const iconResources = collectIconNames();
 
     state.sections = detectSections(mainSSR, mainLive);
     state.blocks = detectBlocks(mainSSR, mainLive, blockResources);
+    state.icons = await detectIcons(mainSSR, mainLive, iconResources);
     buildOverlays();
     refreshOverlayPositions();
+    
+    // 状態が変更されたことをpanelに通知
+    notifyStateChanged();
+  }
+  
+  function notifyStateChanged() {
+    // panelに状態が変更されたことを通知（background script経由）
+    try {
+      chrome.runtime.sendMessage({
+        type: 'eds-state-changed',
+        target: 'eds-background',
+      }).catch(() => {
+        // panelが開いていない場合は無視
+      });
+    } catch (e) {
+      // エラーは無視
+    }
   }
 
   async function getBlockAssets(blockName) {
@@ -970,6 +1239,112 @@
     resizeObserver.observe(document.documentElement);
   }
 
+  let autoUpdateEnabled = true;
+  let updateTimeout = null;
+  let mutationObserver = null;
+  let performanceObserver = null;
+  
+  function scheduleAutoUpdate(delay = 500) {
+    if (!autoUpdateEnabled) return;
+    
+    // 既存のタイムアウトをクリア
+    if (updateTimeout) {
+      clearTimeout(updateTimeout);
+    }
+    
+    // 新しいタイムアウトを設定
+    updateTimeout = setTimeout(async () => {
+      try {
+        console.log('[EDS Inspector Content] Auto-updating page analysis...');
+        await analyzePage();
+        await loadCodeAndMedia();
+        console.log('[EDS Inspector Content] Auto-update complete');
+      } catch (err) {
+        console.error('[EDS Inspector Content] Error in auto-update:', err);
+      }
+    }, delay);
+  }
+  
+  function setupAutoUpdate() {
+    // DOMの変更を監視
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+    }
+    
+    mutationObserver = new MutationObserver((mutations) => {
+      let shouldUpdate = false;
+      
+      mutations.forEach((mutation) => {
+        // main要素内の変更を監視
+        const main = document.querySelector('main');
+        if (main && main.contains(mutation.target)) {
+          // 新しい要素が追加された場合
+          if (mutation.addedNodes.length > 0) {
+            shouldUpdate = true;
+          }
+          // クラス名が変更された場合（ブロックやアイコンの追加）
+          if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+            shouldUpdate = true;
+          }
+        }
+      });
+      
+      if (shouldUpdate) {
+        scheduleAutoUpdate(1000); // 1秒後に更新
+      }
+    });
+    
+    const main = document.querySelector('main');
+    if (main) {
+      mutationObserver.observe(main, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+    
+    // ネットワークリクエストを監視
+    if (performanceObserver) {
+      try {
+        performanceObserver.disconnect();
+      } catch (e) {
+        // 無視
+      }
+    }
+    
+    try {
+      performanceObserver = new PerformanceObserver((list) => {
+        let shouldUpdate = false;
+        
+        list.getEntries().forEach((entry) => {
+          const url = entry.name || '';
+          // ブロックやアイコンのリソースが読み込まれた場合
+          if (url.includes('/blocks/') || url.includes('/icons/')) {
+            shouldUpdate = true;
+          }
+        });
+        
+        if (shouldUpdate) {
+          scheduleAutoUpdate(1000); // 1秒後に更新
+        }
+      });
+      
+      performanceObserver.observe({ entryTypes: ['resource'] });
+    } catch (e) {
+      console.warn('[EDS Inspector Content] PerformanceObserver not supported:', e);
+    }
+    
+    // ページロード完了時に自動的に分析を実行
+    if (document.readyState === 'complete') {
+      scheduleAutoUpdate(500);
+    } else {
+      window.addEventListener('load', () => {
+        scheduleAutoUpdate(500);
+      });
+    }
+  }
+
   async function init() {
     console.log('[EDS Inspector Content] init() called');
     try {
@@ -981,6 +1356,10 @@
       console.log('[EDS Inspector Content] Page analyzed');
       await loadCodeAndMedia();
       console.log('[EDS Inspector Content] Code and media loaded');
+      
+      // 自動更新を設定
+      setupAutoUpdate();
+      
       const state = serializeState();
       console.log('[EDS Inspector Content] State serialized:', state);
       return state;
@@ -1013,6 +1392,7 @@
                 state.overlays = [];
                 state.sections = [];
                 state.blocks = [];
+                state.icons = [];
               }
               const snapshot = await init();
               console.log('[EDS Inspector Content] Initialization complete:', snapshot);
@@ -1020,8 +1400,34 @@
               break;
             }
           case 'reanalyze': {
-            const snapshot = await analyzePage();
+            await analyzePage();
+            await loadCodeAndMedia();
             sendResponse(serializeState());
+            break;
+          }
+          case 'enable-auto-update': {
+            autoUpdateEnabled = true;
+            setupAutoUpdate();
+            sendResponse({ ok: true });
+            break;
+          }
+          case 'disable-auto-update': {
+            autoUpdateEnabled = false;
+            if (updateTimeout) {
+              clearTimeout(updateTimeout);
+              updateTimeout = null;
+            }
+            if (mutationObserver) {
+              mutationObserver.disconnect();
+            }
+            if (performanceObserver) {
+              try {
+                performanceObserver.disconnect();
+              } catch (e) {
+                // 無視
+              }
+            }
+            sendResponse({ ok: true });
             break;
           }
           case 'toggle-overlay': {

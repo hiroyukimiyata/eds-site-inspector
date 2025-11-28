@@ -150,7 +150,7 @@ function renderBlocks(state, refresh) {
   });
 
   // カテゴリの順序を定義
-  const categoryOrder = ['block', 'heading', 'text', 'image', 'list', 'code', 'table', 'quote', 'media', 'button'];
+  const categoryOrder = ['block', 'heading', 'text', 'image', 'list', 'code', 'table', 'quote', 'media', 'button', 'icon'];
   
   categoryOrder.forEach((category) => {
     if (!blocksByCategory[category] || blocksByCategory[category].length === 0) return;
@@ -240,6 +240,58 @@ function renderCode(state) {
   root.appendChild(tree);
 }
 
+function renderIcons(state) {
+  const root = document.querySelector('[data-tab-panel="icons"]');
+  root.innerHTML = '';
+  if (!state.icons || !state.icons.length) {
+    root.innerHTML = '<p class="eds-empty">No icons found on this page.</p>';
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'eds-icon-grid';
+  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px;';
+  
+  state.icons.forEach((icon) => {
+    const card = document.createElement('div');
+    card.className = 'eds-icon-card';
+    card.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; text-align: center; background: #fff; cursor: pointer; transition: box-shadow 0.2s;';
+    card.addEventListener('mouseenter', () => {
+      card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.boxShadow = 'none';
+    });
+    
+    // クリック時にURLを開く
+    if (icon.url) {
+      card.addEventListener('click', () => {
+        window.open(icon.url, '_blank');
+      });
+    }
+    
+    const preview = document.createElement('div');
+    preview.className = 'eds-icon-preview';
+    preview.style.cssText = 'margin-bottom: 8px; display: flex; align-items: center; justify-content: center; min-height: 64px;';
+    if (icon.svg) {
+      preview.innerHTML = icon.svg;
+    } else {
+      preview.textContent = '📦';
+      preview.style.cssText += 'font-size: 48px;';
+    }
+    
+    const name = document.createElement('div');
+    name.className = 'eds-icon-name';
+    name.style.cssText = 'font-size: 11px; color: #000; font-weight: normal;';
+    name.textContent = icon.name;
+    
+    card.appendChild(preview);
+    card.appendChild(name);
+    grid.appendChild(card);
+  });
+  
+  root.appendChild(grid);
+}
+
 function renderMedia(state) {
   const root = document.querySelector('[data-tab-panel="media"]');
   root.innerHTML = '';
@@ -319,8 +371,17 @@ function renderSource(state, detail) {
   }
 }
 
+let autoUpdateInterval = null;
+let isUpdating = false;
+
 async function hydratePanels() {
+  if (isUpdating) {
+    console.log('[EDS Inspector Panel] Already updating, skipping...');
+    return;
+  }
+  
   try {
+    isUpdating = true;
     console.log('[EDS Inspector Panel] Fetching state from content script...');
     const state = await sendToContent('state');
     console.log('[EDS Inspector Panel] State received:', state);
@@ -329,6 +390,7 @@ async function hydratePanels() {
     }
     renderControl(state, hydratePanels);
     renderBlocks(state, hydratePanels);
+    renderIcons(state);
     renderCode(state);
     renderMedia(state);
     if (state.selectedBlock) {
@@ -356,6 +418,34 @@ async function hydratePanels() {
       `;
     }
     throw err;
+  } finally {
+    isUpdating = false;
+  }
+}
+
+function startAutoUpdate() {
+  // 既存のインターバルをクリア
+  if (autoUpdateInterval) {
+    clearInterval(autoUpdateInterval);
+  }
+  
+  // 2秒ごとに状態を更新
+  autoUpdateInterval = setInterval(async () => {
+    try {
+      await hydratePanels();
+    } catch (err) {
+      console.error('[EDS Inspector Panel] Error in auto-update:', err);
+    }
+  }, 2000);
+  
+  console.log('[EDS Inspector Panel] Auto-update started');
+}
+
+function stopAutoUpdate() {
+  if (autoUpdateInterval) {
+    clearInterval(autoUpdateInterval);
+    autoUpdateInterval = null;
+    console.log('[EDS Inspector Panel] Auto-update stopped');
   }
 }
 
@@ -448,6 +538,9 @@ async function initializePanel() {
     console.log('[EDS Inspector Panel] Hydrating panels...');
     await hydratePanels();
     console.log('[EDS Inspector Panel] Panel initialization complete');
+    
+    // 自動更新を開始（2秒ごとに状態を取得してUIを更新）
+    startAutoUpdate();
   } catch (err) {
     console.error('[EDS Inspector Panel] Error initializing panel:', err);
     if (controlPanel && !controlPanel.querySelector('.eds-error')) {

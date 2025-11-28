@@ -103,37 +103,45 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[EDS Inspector] Message received:', message);
   
-  if (message?.type !== 'eds-init-devtools' || !message.tabId) {
-    console.log('[EDS Inspector] Message ignored (not eds-init-devtools or missing tabId)');
+  if (message?.type === 'eds-init-devtools' && message.tabId) {
+    (async () => {
+      console.log('[EDS Inspector] Received eds-init-devtools message for tab:', message.tabId);
+      try {
+        // CSSをインジェクト
+        try {
+          await chrome.scripting.insertCSS({ target: { tabId: message.tabId }, files: ['content.css'] });
+          console.log('[EDS Inspector] CSS injected via DevTools');
+        } catch (cssErr) {
+          console.warn('[EDS Inspector] CSS injection failed (may already be injected):', cssErr.message);
+        }
+        
+        // JavaScriptをインジェクト
+        await chrome.scripting.executeScript({ target: { tabId: message.tabId }, files: ['content.js'] });
+        console.log('[EDS Inspector] JavaScript injected via DevTools');
+        
+        // スクリプトがロードされるまで少し待つ
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        
+        console.log('[EDS Inspector] Sending success response');
+        sendResponse({ ok: true });
+      } catch (err) {
+        console.error('[EDS Inspector] Failed to inject via DevTools:', err);
+        sendResponse({ ok: false, error: err.message });
+      }
+    })();
+    
+    // 非同期処理でsendResponseを呼ぶ場合はtrueを返す必要がある
+    return true;
+  }
+  
+  if (message?.type === 'eds-state-changed' && message?.target === 'eds-background') {
+    // content scriptから状態変更の通知を受け取った場合
+    // panelに通知する（ただし、panelはDevToolsのコンテキストで実行されるため、
+    // 直接メッセージを送ることはできない。代わりに、panelが定期的に状態を取得する）
+    console.log('[EDS Inspector] State changed notification received from content script');
+    sendResponse({ ok: true });
     return false;
   }
   
-  (async () => {
-    console.log('[EDS Inspector] Received eds-init-devtools message for tab:', message.tabId);
-    try {
-      // CSSをインジェクト
-      try {
-        await chrome.scripting.insertCSS({ target: { tabId: message.tabId }, files: ['content.css'] });
-        console.log('[EDS Inspector] CSS injected via DevTools');
-      } catch (cssErr) {
-        console.warn('[EDS Inspector] CSS injection failed (may already be injected):', cssErr.message);
-      }
-      
-      // JavaScriptをインジェクト
-      await chrome.scripting.executeScript({ target: { tabId: message.tabId }, files: ['content.js'] });
-      console.log('[EDS Inspector] JavaScript injected via DevTools');
-      
-      // スクリプトがロードされるまで少し待つ
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      
-      console.log('[EDS Inspector] Sending success response');
-      sendResponse({ ok: true });
-    } catch (err) {
-      console.error('[EDS Inspector] Failed to inject via DevTools:', err);
-      sendResponse({ ok: false, error: err.message });
-    }
-  })();
-  
-  // 非同期処理でsendResponseを呼ぶ場合はtrueを返す必要がある
-  return true;
+  return false;
 });
