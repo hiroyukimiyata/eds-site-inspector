@@ -5,6 +5,7 @@
   "description": "Analyze Edge Delivery Services pages to visualize sections, blocks, and associated code/media sources.",
   "permissions": ["scripting", "activeTab", "storage"],
   "host_permissions": ["<all_urls>"],
+  "devtools_page": "devtools.html",
   "action": {
     "default_title": "Inspect EDS page"
   },
