@@ -282,3 +282,68 @@ section[hidden] {
   border-radius: 6px;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
 }
+
+.eds-back-button {
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.eds-back-button:hover {
+  background: #1a2332;
+  border-color: var(--accent-plain);
+}
+
+.eds-icon-grid,
+.eds-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.eds-icon-card,
+.eds-media-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  background: var(--bg-muted);
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+
+.eds-icon-card:hover,
+.eds-media-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.eds-icon-preview,
+.eds-media-preview {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+}
+
+.eds-media-preview {
+  min-height: 120px;
+  background: #0f172a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.eds-icon-name,
+.eds-media-name {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: normal;
+  word-break: break-all;
+}

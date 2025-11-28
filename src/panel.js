@@ -193,8 +193,7 @@ function renderBlocks(state, refresh) {
         
         await sendToContent('select-block', { id: block.id });
         const detail = await sendToContent('get-block-detail', { id: block.id });
-        renderSource(state, detail);
-        switchTab('source');
+        renderBlockDetail(state, detail, refresh);
       });
       
       list.appendChild(li);
@@ -249,18 +248,10 @@ function renderIcons(state) {
   }
   const grid = document.createElement('div');
   grid.className = 'eds-icon-grid';
-  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px;';
   
   state.icons.forEach((icon) => {
     const card = document.createElement('div');
     card.className = 'eds-icon-card';
-    card.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; text-align: center; background: #fff; cursor: pointer; transition: box-shadow 0.2s;';
-    card.addEventListener('mouseenter', () => {
-      card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-    });
-    card.addEventListener('mouseleave', () => {
-      card.style.boxShadow = 'none';
-    });
     
     // クリック時にURLを開く
     if (icon.url) {
@@ -271,17 +262,15 @@ function renderIcons(state) {
     
     const preview = document.createElement('div');
     preview.className = 'eds-icon-preview';
-    preview.style.cssText = 'margin-bottom: 8px; display: flex; align-items: center; justify-content: center; min-height: 64px;';
     if (icon.svg) {
       preview.innerHTML = icon.svg;
     } else {
       preview.textContent = '📦';
-      preview.style.cssText += 'font-size: 48px;';
+      preview.style.fontSize = '48px';
     }
     
     const name = document.createElement('div');
     name.className = 'eds-icon-name';
-    name.style.cssText = 'font-size: 11px; color: #000; font-weight: normal;';
     name.textContent = icon.name;
     
     card.appendChild(preview);
@@ -305,18 +294,10 @@ function renderMedia(state) {
   }
   const grid = document.createElement('div');
   grid.className = 'eds-media-grid';
-  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px;';
   
   state.mediaFiles.forEach((file) => {
     const card = document.createElement('div');
     card.className = 'eds-media-card';
-    card.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; text-align: center; background: #fff; cursor: pointer; transition: box-shadow 0.2s;';
-    card.addEventListener('mouseenter', () => {
-      card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-    });
-    card.addEventListener('mouseleave', () => {
-      card.style.boxShadow = 'none';
-    });
     
     // クリック時にURLを開く
     if (file.url) {
@@ -327,13 +308,12 @@ function renderMedia(state) {
     
     const preview = document.createElement('div');
     preview.className = 'eds-media-preview';
-    preview.style.cssText = 'margin-bottom: 8px; display: flex; align-items: center; justify-content: center; min-height: 120px; background: #f5f5f5; border-radius: 4px; overflow: hidden;';
     
     if (file.isVideo) {
       // 動画の場合はビデオアイコンを表示
       preview.innerHTML = `
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M8 5V19L19 12L8 5Z" fill="#666"/>
+          <path d="M8 5V19L19 12L8 5Z" fill="#94a3b8"/>
         </svg>
       `;
     } else if (file.isImage && file.url) {
@@ -343,18 +323,17 @@ function renderMedia(state) {
       img.style.cssText = 'max-width: 100%; max-height: 120px; object-fit: contain;';
       img.onerror = () => {
         preview.innerHTML = '📷';
-        preview.style.cssText += 'font-size: 48px;';
+        preview.style.fontSize = '48px';
       };
       preview.appendChild(img);
     } else {
       // その他の場合はファイルアイコンを表示
       preview.innerHTML = '📄';
-      preview.style.cssText += 'font-size: 48px;';
+      preview.style.fontSize = '48px';
     }
     
     const name = document.createElement('div');
     name.className = 'eds-media-name';
-    name.style.cssText = 'font-size: 11px; color: #000; font-weight: normal; word-break: break-all;';
     name.textContent = file.fileName || file.path.split('/').pop();
     
     card.appendChild(preview);
@@ -365,13 +344,30 @@ function renderMedia(state) {
   root.appendChild(grid);
 }
 
-function renderSource(state, detail) {
-  const root = document.querySelector('[data-tab-panel="source"]');
-  root.innerHTML = '';
+function renderBlockDetail(state, detail, refresh) {
+  const root = document.querySelector('[data-tab-panel="blocks"]');
   if (!detail || !detail.block) {
-    root.innerHTML = '<p class="eds-empty">Select a block from the list or overlay to inspect its source.</p>';
     return;
   }
+  
+  // 一覧に戻るボタンを作成
+  const backButton = document.createElement('button');
+  backButton.className = 'eds-back-button';
+  backButton.textContent = '← Back to Blocks List';
+  backButton.addEventListener('click', async () => {
+    await sendToContent('select-block', { id: null });
+    if (refresh) {
+      refresh();
+    } else {
+      hydratePanels();
+    }
+  });
+  
+  // 既存の内容をクリア
+  root.innerHTML = '';
+  root.appendChild(backButton);
+  
+  // Source表示の内容を追加
   const meta = document.createElement('div');
   meta.className = 'eds-meta';
   meta.innerHTML = `
@@ -435,16 +431,15 @@ async function hydratePanels() {
       throw new Error('No state received from content script');
     }
     renderControl(state, hydratePanels);
-    renderBlocks(state, hydratePanels);
+    if (state.selectedBlock) {
+      const detail = await sendToContent('get-block-detail', { id: state.selectedBlock });
+      renderBlockDetail(state, detail, hydratePanels);
+    } else {
+      renderBlocks(state, hydratePanels);
+    }
     renderIcons(state);
     renderCode(state);
     renderMedia(state);
-    if (state.selectedBlock) {
-      const detail = await sendToContent('get-block-detail', { id: state.selectedBlock });
-      renderSource(state, detail);
-    } else {
-      renderSource(state, null);
-    }
   } catch (err) {
     console.error('[EDS Inspector Panel] Error hydrating panels:', err);
     // エラーメッセージを表示
