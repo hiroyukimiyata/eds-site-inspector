@@ -1,24 +1,48 @@
 (() => {
-  if (window.__edsInspectorInitialized) {
-    console.warn('EDS Site Inspector is already running.');
+  // 既に実行されている場合でも、メッセージリスナーが動作するようにする
+  const isAlreadyInitialized = window.__edsInspectorInitialized;
+  if (isAlreadyInitialized) {
+    console.warn('[EDS Inspector Content] Script already initialized, but message listener should still work.');
+  } else {
+    window.__edsInspectorInitialized = true;
+  }
+  
+  // メッセージリスナーが既に設定されているか確認
+  if (window.__edsInspectorMessageListenerAttached) {
+    console.log('[EDS Inspector Content] Message listener already attached, skipping re-initialization.');
+    // メッセージリスナーは既に設定されているので、早期リターン
     return;
   }
-  window.__edsInspectorInitialized = true;
 
   const UI_IDS = {
     overlayRoot: 'eds-inspector-overlay-root',
   };
 
+  // Default Contentの定義（ドキュメントに基づく）
+  // https://www.aem.live/developer/block-collection/
   const DEFAULT_CONTENT_MAP = [
-    { selector: 'h1', name: 'heading (h1)' },
-    { selector: 'h2', name: 'heading (h2)' },
-    { selector: 'h3', name: 'heading (h3)' },
-    { selector: 'picture', name: 'image' },
-    { selector: 'img', name: 'image' },
-    { selector: 'table', name: 'table' },
-    { selector: 'blockquote', name: 'blockquote' },
-    { selector: 'pre', name: 'code' },
-    { selector: 'video', name: 'video' },
+    // Headings: h1-h6
+    { selector: 'h1', name: 'heading (h1)', category: 'heading' },
+    { selector: 'h2', name: 'heading (h2)', category: 'heading' },
+    { selector: 'h3', name: 'heading (h3)', category: 'heading' },
+    { selector: 'h4', name: 'heading (h4)', category: 'heading' },
+    { selector: 'h5', name: 'heading (h5)', category: 'heading' },
+    { selector: 'h6', name: 'heading (h6)', category: 'heading' },
+    // Text: p
+    { selector: 'p', name: 'text', category: 'text' },
+    // Images: picture, img
+    { selector: 'picture', name: 'image', category: 'image' },
+    { selector: 'img', name: 'image', category: 'image' },
+    // Lists: ul, ol
+    { selector: 'ul', name: 'list (unordered)', category: 'list' },
+    { selector: 'ol', name: 'list (ordered)', category: 'list' },
+    // Code: pre, code
+    { selector: 'pre', name: 'code', category: 'code' },
+    { selector: 'code', name: 'code', category: 'code' },
+    // Other semantic elements
+    { selector: 'table', name: 'table', category: 'table' },
+    { selector: 'blockquote', name: 'blockquote', category: 'quote' },
+    { selector: 'video', name: 'video', category: 'media' },
   ];
 
   const state = {
@@ -26,6 +50,7 @@
     blocks: [],
     overlays: [],
     overlaysEnabled: { sections: true, blocks: true },
+    overlaysVisible: true, // オーバーレイ全体の表示状態
     selectedBlockId: null,
     codeBasePath: null,
     mediaBasePath: null,
@@ -102,59 +127,346 @@
     const addFromUrl = (urlString) => {
       try {
         const { pathname } = new URL(urlString, window.location.href);
+        // /blocks/{block-name}/ というパターンを検出
         const match = pathname.match(/\/blocks\/([^/]+)\//);
-        if (match && match[1]) blockNames.add(match[1]);
+        if (match && match[1]) {
+          blockNames.add(match[1]);
+          console.log('[EDS Inspector] Found block resource:', match[1], 'from URL:', urlString);
+        }
       } catch (e) {
         /* noop */
       }
     };
 
-    performance.getEntriesByType('resource').forEach((entry) => addFromUrl(entry.name));
+    // Performance APIからネットワークリクエストを収集
+    performance.getEntriesByType('resource').forEach((entry) => {
+      addFromUrl(entry.name);
+    });
+    
+    // DOMからlink/scriptタグのURLを収集
     document.querySelectorAll('link[href*="/blocks/"], script[src*="/blocks/"]').forEach((el) => {
       const url = el.getAttribute('href') || el.getAttribute('src');
       if (url) addFromUrl(url);
     });
+    
+    // ネットワークリクエストを監視（既に読み込まれたリソースも含む）
+    // 追加のリクエストをキャッチするため、PerformanceObserverも使用
+    try {
+      const observer = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          if (entry.name) addFromUrl(entry.name);
+        });
+      });
+      observer.observe({ entryTypes: ['resource'] });
+    } catch (e) {
+      // PerformanceObserverがサポートされていない場合は無視
+    }
+    
+    console.log('[EDS Inspector] Collected block names:', Array.from(blockNames));
     return blockNames;
   }
 
   function detectSections(mainSSR, mainLive) {
     const sections = [];
-    const candidates = Array.from(mainSSR.children);
-    candidates.forEach((el, index) => {
+    const seen = new Set();
+    
+    // まず、data-section-id属性がある要素を優先的に検出
+    const sectionIdElements = mainSSR.querySelectorAll('[data-section-id]');
+    sectionIdElements.forEach((el, index) => {
       if (!(el instanceof HTMLElement)) return;
       const path = computeElementPath(el, mainSSR);
       const liveElement = findElementByPath(mainLive, path);
       if (!liveElement) return;
+      const key = `section-id-${el.getAttribute('data-section-id')}`;
+      if (seen.has(key)) return;
+      seen.add(key);
       const label = el.getAttribute('data-section-id') || el.className || `section-${index + 1}`;
-      sections.push({ id: `section-${index}`, element: liveElement, label });
+      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
     });
+    
+    // 次に、<main>の直接の子要素を検出（既存のロジック）
+    const directChildren = Array.from(mainSSR.children);
+    directChildren.forEach((el, index) => {
+      if (!(el instanceof HTMLElement)) return;
+      const path = computeElementPath(el, mainSSR);
+      const liveElement = findElementByPath(mainLive, path);
+      if (!liveElement) return;
+      const key = `direct-child-${index}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const label = el.getAttribute('data-section-id') || el.className || `section-${sections.length + 1}`;
+      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
+    });
+    
+    // 最後に、<main>内のすべての<section>要素を検出
+    const sectionElements = mainSSR.querySelectorAll('section');
+    sectionElements.forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      // 既に検出済みの要素はスキップ
+      const path = computeElementPath(el, mainSSR);
+      const liveElement = findElementByPath(mainLive, path);
+      if (!liveElement) return;
+      // 既に追加されている要素かチェック
+      const alreadyAdded = sections.some(s => s.element === liveElement);
+      if (alreadyAdded) return;
+      const label = el.getAttribute('data-section-id') || el.className || el.id || `section-${sections.length + 1}`;
+      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
+    });
+    
     return sections;
   }
 
   function detectBlocks(mainSSR, mainLive, blockResources) {
     const blocks = [];
-    const seen = new Set();
-    const selectors = ['[data-block-name]', '.block'];
-    DEFAULT_CONTENT_MAP.forEach((entry) => selectors.push(entry.selector));
-    const candidates = mainSSR.querySelectorAll(selectors.join(','));
-    candidates.forEach((el, index) => {
+    const seenElements = new Set();
+    
+    console.log('[EDS Inspector] Block resources from network:', Array.from(blockResources));
+    console.log('[EDS Inspector] SSR main element:', mainSSR);
+    console.log('[EDS Inspector] Live main element:', mainLive);
+    
+    // EDSブロックの構造に基づく検出:
+    // 1. ブロック名はCSSクラス名として使用される (例: <div class="blockname">)
+    // 2. ネットワークリクエストで /blocks/{block-name}/ が読み込まれる
+    // 3. SSRマークアップでは、ブロック名がクラス名として使用される
+    
+    // ネットワークリクエストから収集したブロック名を優先的に使用
+    // ライブDOMで直接クラス名で検索する（パスベースの検出は信頼性が低いため）
+    blockResources.forEach((blockName) => {
+      // ライブDOMでブロッククラスを持つ要素を直接検索
+      try {
+        const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
+        liveElements.forEach((liveElement) => {
+          if (!(liveElement instanceof HTMLElement)) return;
+          // 既に検出済みの要素はスキップ
+          if (seenElements.has(liveElement)) return;
+          
+          // クラスリストにブロック名が含まれていることを確認
+          const classList = Array.from(liveElement.classList);
+          if (!classList.includes(blockName)) return;
+          
+          // main要素の子孫要素であることを確認
+          if (!mainLive.contains(liveElement)) return;
+          
+          seenElements.add(liveElement);
+          blocks.push({
+            id: `block-${blocks.length}`,
+            element: liveElement,
+            name: blockName,
+            tagName: liveElement.tagName.toLowerCase(),
+            classes: liveElement.className || '',
+          });
+          console.log('[EDS Inspector] Detected block:', blockName, 'live element:', liveElement);
+        });
+      } catch (e) {
+        console.warn('[EDS Inspector] Error querying for block:', blockName, e);
+      }
+    });
+    
+    // SSRマークアップからもブロッククラスを検出（ネットワークリクエストに存在しない場合）
+    const allSSRElements = mainSSR.querySelectorAll('*');
+    const ssrBlockClasses = new Set();
+    
+    allSSRElements.forEach((el) => {
       if (!(el instanceof HTMLElement)) return;
-      const path = computeElementPath(el, mainSSR);
-      const liveElement = findElementByPath(mainLive, path);
-      if (!liveElement) return;
-      const key = el.dataset.blockName || el.className || `${el.tagName}-${index}`;
-      if (seen.has(key)) return;
-      const name = inferBlockName(el);
-      if (!blockResources.has(name)) return; // not backed by /blocks/{name}
-      seen.add(key);
-      blocks.push({
-        id: `block-${index}`,
-        element: liveElement,
-        name,
-        tagName: el.tagName.toLowerCase(),
-        classes: liveElement.className || '',
+      const classList = Array.from(el.classList);
+      classList.forEach((className) => {
+        // ブロッククラスとして考えられるクラス名を収集
+        if (className && 
+            className !== 'block' && 
+            !className.startsWith('section-') &&
+            !className.startsWith('icon-') &&
+            className !== 'contained' &&
+            className.length > 2 &&
+            !className.includes(' ') &&
+            /^[a-z][a-z0-9-]*$/.test(className)) {
+          ssrBlockClasses.add(className);
+        }
       });
     });
+    
+    console.log('[EDS Inspector] Potential block classes from SSR:', Array.from(ssrBlockClasses));
+    
+    // SSRマークアップから検出したブロッククラスで、ネットワークリクエストに存在しないものを検出
+    ssrBlockClasses.forEach((blockName) => {
+      if (blockResources.has(blockName)) return; // 既に検出済み
+      
+      try {
+        const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
+        liveElements.forEach((liveElement) => {
+          if (!(liveElement instanceof HTMLElement)) return;
+          // 既に検出済みの要素はスキップ
+          if (seenElements.has(liveElement)) return;
+          
+          // クラスリストにブロック名が含まれていることを確認
+          const classList = Array.from(liveElement.classList);
+          if (!classList.includes(blockName)) return;
+          
+          // main要素の子孫要素であることを確認
+          if (!mainLive.contains(liveElement)) return;
+          
+          seenElements.add(liveElement);
+          blocks.push({
+            id: `block-${blocks.length}`,
+            element: liveElement,
+            name: blockName,
+            tagName: liveElement.tagName.toLowerCase(),
+            classes: liveElement.className || '',
+          });
+          console.log('[EDS Inspector] Detected block (from SSR, no network resource):', blockName);
+        });
+      } catch (e) {
+        console.warn('[EDS Inspector] Error querying for SSR block:', blockName, e);
+      }
+    });
+    
+    // Default Contentの検出
+    // Default Contentはブロックリソース（/blocks/{name}/）を持たないため、
+    // SSRマークアップから直接セマンティックな要素を検出する
+    console.log('[EDS Inspector] Detecting default content blocks...');
+    
+    DEFAULT_CONTENT_MAP.forEach((contentDef) => {
+      // SSRマークアップから該当する要素を検出
+      const ssrElements = mainSSR.querySelectorAll(contentDef.selector);
+      ssrElements.forEach((ssrEl) => {
+        if (!(ssrEl instanceof HTMLElement)) return;
+        
+        // textブロック（<p>タグ）内の要素は検出しない
+        // codeやlinkなどは、<p>タグ内にある場合はオーバーレイ表示を省略
+        let parent = ssrEl.parentElement;
+        let isInsideParagraph = false;
+        while (parent && parent !== mainSSR) {
+          if (parent.tagName.toLowerCase() === 'p') {
+            isInsideParagraph = true;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        
+        // <p>タグ内の要素で、かつtextブロック自体でない場合はスキップ
+        if (isInsideParagraph && contentDef.selector !== 'p') {
+          return;
+        }
+        
+        // ライブDOMで対応する要素を見つける
+        // セレクタとインデックスを使って検出
+        const allLiveElements = mainLive.querySelectorAll(contentDef.selector);
+        const ssrIndex = Array.from(mainSSR.querySelectorAll(contentDef.selector)).indexOf(ssrEl);
+        const liveElement = allLiveElements[ssrIndex];
+        
+        if (!liveElement) {
+          // パスベースの検出を試す
+          const path = computeElementPath(ssrEl, mainSSR);
+          const pathBasedElement = findElementByPath(mainLive, path);
+          if (!pathBasedElement) return;
+          
+          // タグ名が一致することを確認
+          if (pathBasedElement.tagName.toLowerCase() !== contentDef.selector.toLowerCase()) return;
+          
+          // 既に検出済みの要素はスキップ
+          if (seenElements.has(pathBasedElement)) return;
+          
+          // ライブDOMでも<p>タグ内かどうかを確認
+          let liveParent = pathBasedElement.parentElement;
+          let isInsideLiveParagraph = false;
+          while (liveParent && liveParent !== mainLive) {
+            if (liveParent.tagName.toLowerCase() === 'p') {
+              isInsideLiveParagraph = true;
+              break;
+            }
+            liveParent = liveParent.parentElement;
+          }
+          
+          // <p>タグ内の要素で、かつtextブロック自体でない場合はスキップ
+          if (isInsideLiveParagraph && contentDef.selector !== 'p') {
+            return;
+          }
+          
+          seenElements.add(pathBasedElement);
+          blocks.push({
+            id: `block-${blocks.length}`,
+            element: pathBasedElement,
+            name: contentDef.name,
+            tagName: pathBasedElement.tagName.toLowerCase(),
+            classes: pathBasedElement.className || '',
+            category: contentDef.category || 'default',
+          });
+          console.log('[EDS Inspector] Detected default content:', contentDef.name, 'element:', pathBasedElement);
+          return;
+        }
+        
+        // 既に検出済みの要素はスキップ
+        if (seenElements.has(liveElement)) return;
+        
+        // main要素の子孫要素であることを確認
+        if (!mainLive.contains(liveElement)) return;
+        
+        // ライブDOMでも<p>タグ内かどうかを確認
+        let liveParent = liveElement.parentElement;
+        let isInsideLiveParagraph = false;
+        while (liveParent && liveParent !== mainLive) {
+          if (liveParent.tagName.toLowerCase() === 'p') {
+            isInsideLiveParagraph = true;
+            break;
+          }
+          liveParent = liveParent.parentElement;
+        }
+        
+        // <p>タグ内の要素で、かつtextブロック自体でない場合はスキップ
+        if (isInsideLiveParagraph && contentDef.selector !== 'p') {
+          return;
+        }
+        
+        seenElements.add(liveElement);
+        blocks.push({
+          id: `block-${blocks.length}`,
+          element: liveElement,
+          name: contentDef.name,
+          tagName: liveElement.tagName.toLowerCase(),
+          classes: liveElement.className || '',
+          category: contentDef.category || 'default',
+        });
+        console.log('[EDS Inspector] Detected default content:', contentDef.name, 'element:', liveElement);
+      });
+    });
+    
+    // Buttonsの検出（特別な処理が必要）
+    // Buttonsは通常、単独のpタグ内のaタグで、strong/emでスタイリングされる
+    // https://www.aem.live/developer/block-collection/buttons
+    const buttonParagraphs = mainSSR.querySelectorAll('p');
+    buttonParagraphs.forEach((ssrP) => {
+      if (!(ssrP instanceof HTMLElement)) return;
+      const link = ssrP.querySelector('a');
+      if (!link) return;
+      
+      // 単独のaタグを持つpタグを検出
+      const children = Array.from(ssrP.children);
+      if (children.length !== 1 || children[0].tagName.toLowerCase() !== 'a') return;
+      
+      // パスベースでライブDOMの対応要素を見つける
+      const path = computeElementPath(ssrP, mainSSR);
+      const liveP = findElementByPath(mainLive, path);
+      if (!liveP) return;
+      
+      // 既に検出済みの要素はスキップ
+      if (seenElements.has(liveP)) return;
+      
+      // main要素の子孫要素であることを確認
+      if (!mainLive.contains(liveP)) return;
+      
+      seenElements.add(liveP);
+      blocks.push({
+        id: `block-${blocks.length}`,
+        element: liveP,
+        name: 'button',
+        tagName: liveP.tagName.toLowerCase(),
+        classes: liveP.className || '',
+        category: 'button',
+      });
+      console.log('[EDS Inspector] Detected button:', liveP);
+    });
+    
+    console.log('[EDS Inspector] Detected blocks:', blocks.map(b => ({ name: b.name, tagName: b.tagName, classes: b.classes })));
+    
     return blocks;
   }
 
@@ -164,7 +476,16 @@
     el.dataset.overlayId = item.id;
     const label = document.createElement('div');
     label.className = 'eds-overlay__label';
-    label.textContent = type === 'section' ? `Section: ${item.label}` : `Block: ${item.name}`;
+    
+    if (type === 'section') {
+      label.textContent = `Section: ${item.label}`;
+    } else {
+      // ブロックのカテゴリに基づいて、BlockかDefault Contentかを判断
+      const isDefaultContent = item.category && item.category !== 'block';
+      const prefix = isDefaultContent ? 'Default Content:' : 'Block:';
+      label.textContent = `${prefix} ${item.name}`;
+    }
+    
     el.appendChild(label);
     el.addEventListener('click', (evt) => {
       evt.stopPropagation();
@@ -180,6 +501,14 @@
     const root = document.getElementById(UI_IDS.overlayRoot);
     if (!root) return;
     ensureOverlayRootSizing(root);
+    
+    // オーバーレイ全体が非表示の場合は、ルート要素を非表示にする
+    if (!state.overlaysVisible) {
+      root.style.display = 'none';
+      return;
+    }
+    
+    root.style.display = 'block';
     const viewportOffset = { x: window.scrollX, y: window.scrollY };
     state.overlays.forEach((overlay) => {
       const { element, target } = overlay;
@@ -187,8 +516,15 @@
       element.style.transform = `translate(${rect.left + viewportOffset.x}px, ${rect.top + viewportOffset.y}px)`;
       element.style.width = `${rect.width}px`;
       element.style.height = `${rect.height}px`;
-      element.style.display = overlay.visible ? 'block' : 'none';
+      // オーバーレイ全体が表示されている場合のみ、個別のオーバーレイの表示状態を確認
+      element.style.display = (overlay.visible && state.overlaysEnabled[overlay.item.id.startsWith('section-') ? 'sections' : 'blocks']) ? 'block' : 'none';
     });
+  }
+  
+  function toggleOverlays() {
+    state.overlaysVisible = !state.overlaysVisible;
+    refreshOverlayPositions();
+    console.log('[EDS Inspector] Overlays toggled, visible:', state.overlaysVisible);
   }
 
   function setHighlight(id) {
@@ -215,9 +551,44 @@
   }
 
   function serializeState() {
+    // ブロックをユニークにする（同じ要素を複数回検出しないようにする）
+    const uniqueBlocks = new Map();
+    const seenElements = new Set();
+    
+    state.blocks.forEach((block) => {
+      // 要素ベースでユニーク化
+      if (seenElements.has(block.element)) return;
+      seenElements.add(block.element);
+      
+      // nameだけでユニーク化（同じnameのブロックは1つだけ表示）
+      const key = block.name;
+      if (!uniqueBlocks.has(key)) {
+        uniqueBlocks.set(key, block);
+      } else {
+        // 既存のブロックと比較して、より適切なものを選択
+        const existing = uniqueBlocks.get(key);
+        // tagNameがより具体的なものを優先（例: picture > img）
+        const existingTag = existing.tagName.toLowerCase();
+        const currentTag = block.tagName.toLowerCase();
+        // picture > img, pre > code などの優先順位
+        const tagPriority = { picture: 3, pre: 3, h1: 6, h2: 5, h3: 4, h4: 3, h5: 2, h6: 1, ol: 2, ul: 2 };
+        const existingPriority = tagPriority[existingTag] || 0;
+        const currentPriority = tagPriority[currentTag] || 0;
+        if (currentPriority > existingPriority) {
+          uniqueBlocks.set(key, block);
+        }
+      }
+    });
+    
     return {
       sections: state.sections.map((section) => ({ id: section.id, label: section.label })),
-      blocks: state.blocks.map((block) => ({ id: block.id, name: block.name, tagName: block.tagName, classes: block.classes })),
+      blocks: Array.from(uniqueBlocks.values()).map((block) => ({ 
+        id: block.id, 
+        name: block.name, 
+        tagName: block.tagName, 
+        classes: block.classes,
+        category: block.category || 'block'
+      })),
       overlaysEnabled: { ...state.overlaysEnabled },
       selectedBlock: state.selectedBlockId,
       codeBasePath: state.codeBasePath,
@@ -225,6 +596,53 @@
       codeTree: state.codeTree,
       mediaFiles: state.mediaFiles,
     };
+  }
+  
+  function showDevToolsPrompt() {
+    // DevToolsを開くように促すメッセージを表示
+    const prompt = document.createElement('div');
+    prompt.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(120deg, #0ea5e9, #6366f1);
+      color: #0b1220;
+      padding: 16px 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 2147483647;
+      font-family: Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      max-width: 400px;
+      line-height: 1.5;
+    `;
+    prompt.innerHTML = `
+      <div style="font-weight: 700; margin-bottom: 8px;">EDS Site Inspector</div>
+      <div style="margin-bottom: 12px;">Please open DevTools (F12 or Cmd+Option+I) and select the "EDS Site Inspector" tab.</div>
+      <button id="eds-close-prompt" style="
+        background: #0b1220;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 12px;
+      ">Close</button>
+    `;
+    document.body.appendChild(prompt);
+    
+    const closeBtn = prompt.querySelector('#eds-close-prompt');
+    closeBtn.addEventListener('click', () => {
+      prompt.remove();
+    });
+    
+    // 5秒後に自動的に閉じる
+    setTimeout(() => {
+      if (prompt.parentNode) {
+        prompt.remove();
+      }
+    }, 5000);
   }
 
   function buildTreeFromPaths(paths) {
@@ -403,23 +821,54 @@
   }
 
   async function init() {
-    attachGlobalListeners();
-    await resolveConfig();
-    await analyzePage();
-    await loadCodeAndMedia();
-    return serializeState();
+    console.log('[EDS Inspector Content] init() called');
+    try {
+      attachGlobalListeners();
+      console.log('[EDS Inspector Content] Global listeners attached');
+      await resolveConfig();
+      console.log('[EDS Inspector Content] Config resolved');
+      await analyzePage();
+      console.log('[EDS Inspector Content] Page analyzed');
+      await loadCodeAndMedia();
+      console.log('[EDS Inspector Content] Code and media loaded');
+      const state = serializeState();
+      console.log('[EDS Inspector Content] State serialized:', state);
+      return state;
+    } catch (err) {
+      console.error('[EDS Inspector Content] Error in init():', err);
+      throw err;
+    }
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.target !== 'eds-content') return;
-    (async () => {
-      try {
-        switch (message.type) {
-          case 'init': {
-            const snapshot = await init();
-            sendResponse(snapshot);
-            break;
-          }
+  // メッセージリスナーを設定（既に実行されている場合でも）
+  if (!window.__edsInspectorMessageListenerAttached) {
+    window.__edsInspectorMessageListenerAttached = true;
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('[EDS Inspector Content] Message received:', message);
+      if (message?.target !== 'eds-content') {
+        console.log('[EDS Inspector Content] Message target mismatch, ignoring');
+        return;
+      }
+      (async () => {
+        try {
+          switch (message.type) {
+            case 'init': {
+              console.log('[EDS Inspector Content] Initializing...');
+              // 既に実行されている場合でも、初期化を再実行できるようにする
+              if (window.__edsInspectorInitialized) {
+                console.log('[EDS Inspector Content] Re-initializing...');
+                // 既存のオーバーレイを削除
+                destroy();
+                // 状態をリセット
+                state.overlays = [];
+                state.sections = [];
+                state.blocks = [];
+              }
+              const snapshot = await init();
+              console.log('[EDS Inspector Content] Initialization complete:', snapshot);
+              sendResponse(snapshot);
+              break;
+            }
           case 'reanalyze': {
             const snapshot = await analyzePage();
             sendResponse(serializeState());
@@ -433,6 +882,11 @@
             });
             refreshOverlayPositions();
             sendResponse(serializeState());
+            break;
+          }
+          case 'toggle-overlays': {
+            toggleOverlays();
+            sendResponse({ ok: true, visible: state.overlaysVisible });
             break;
           }
           case 'destroy': {
@@ -459,13 +913,26 @@
             sendResponse(detail);
             break;
           }
+          case 'show-devtools-prompt': {
+            showDevToolsPrompt();
+            sendResponse({ ok: true });
+            break;
+          }
           default:
+            console.warn('[EDS Inspector Content] Unknown message type:', message.type);
             sendResponse({ ok: false, reason: 'unknown-message' });
         }
       } catch (err) {
+        console.error('[EDS Inspector Content] Error handling message:', err);
         sendResponse({ ok: false, error: err.message });
       }
     })();
     return true;
   });
+    console.log('[EDS Inspector Content] Message listener attached');
+  } else {
+    console.log('[EDS Inspector Content] Message listener already attached, skipping');
+  }
+  
+  console.log('[EDS Inspector Content] Script loaded and message listener attached');
 })();

@@ -10,50 +10,28 @@
   --warning: #f59e0b;
 }
 
-body {
+html, body {
   margin: 0;
+  height: 100%;
+  overflow: hidden;
   font-family: Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
 
-.eds-panel__header {
+.eds-panel__container {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--accent);
-  color: #0b1220;
-}
-
-.eds-panel__header h1 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.eds-panel__subtitle {
-  margin: 2px 0 0;
-  color: #0b1220cc;
-  font-size: 13px;
-}
-
-.eds-badge {
-  background: #0b1220;
-  color: #fff;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 11px;
+  height: 100%;
 }
 
 .eds-tabs {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
+  flex-direction: column;
   background: #0b1220;
   gap: 2px;
   padding: 4px;
+  width: 120px;
+  flex-shrink: 0;
 }
 
 .eds-tabs button {
@@ -61,9 +39,11 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
   font-size: 12px;
+  text-align: left;
+  width: 100%;
 }
 
 .eds-tabs button.active {
@@ -73,9 +53,10 @@ body {
 }
 
 main {
+  flex: 1;
   padding: 12px 14px;
   background: var(--bg);
-  min-height: 320px;
+  overflow-y: auto;
 }
 
 section[hidden] {
@@ -116,15 +97,29 @@ section[hidden] {
   border-color: transparent;
 }
 
+.eds-category-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 16px 0 8px;
+  padding: 0;
+}
+
+.eds-category-title:first-child {
+  margin-top: 0;
+}
+
 .eds-block-list {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 16px 0;
   display: grid;
   gap: 8px;
 }
 
-.eds-block-list li {
+.eds-block-item {
   background: var(--bg-muted);
   border: 1px solid var(--border);
   padding: 10px 12px;
@@ -133,6 +128,27 @@ section[hidden] {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: all 0.2s ease;
+}
+
+.eds-block-item:hover {
+  background: #1a2332;
+  border-color: var(--accent-plain);
+}
+
+.eds-block-item.is-selected {
+  background: var(--accent);
+  border-color: transparent;
+  color: #0b1220;
+}
+
+.eds-block-item.is-selected .eds-block-list__tag {
+  background: rgba(11, 18, 32, 0.2);
+  color: #0b1220;
+}
+
+.eds-block-name {
+  font-weight: 500;
 }
 
 .eds-block-list__tag {
