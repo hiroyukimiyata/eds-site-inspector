@@ -1,0 +1,17 @@
+{
+  "name": "eds-site-inspector",
+  "version": "1.0.0",
+  "description": "Chrome extension to inspect Edge Delivery Services pages for sections, blocks, and source assets.",
+  "type": "commonjs",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "watch": "nodemon --watch src --watch scripts/build.js --exec \"npm run build\""
+  },
+  "keywords": ["aem", "eds", "edge-delivery-services", "chrome-extension", "inspector"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "nodemon": "^3.1.9"
+  }
+}
