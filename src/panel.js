@@ -295,10 +295,6 @@ function renderIcons(state) {
 function renderMedia(state) {
   const root = document.querySelector('[data-tab-panel="media"]');
   root.innerHTML = '';
-  if (!state.mediaBasePath) {
-    root.innerHTML = '<p class="eds-empty">Media Bus path could not be determined.</p>';
-    return;
-  }
   if (!state.mediaFiles) {
     root.innerHTML = '<p class="eds-loading">Loading Media Bus…</p>';
     return;
@@ -307,16 +303,66 @@ function renderMedia(state) {
     root.innerHTML = '<p class="eds-empty">No media_ files found.</p>';
     return;
   }
-  const list = document.createElement('ul');
-  list.className = 'eds-file-list';
-  state.mediaFiles.forEach((item) => {
-    const li = document.createElement('li');
-    li.className = 'eds-file-card';
-    li.innerHTML = `<div class="eds-file-card__path">${item.path}</div><div class="eds-hint">Click to open</div>`;
-    li.addEventListener('click', () => window.open(`${state.mediaBasePath}${item.path}`, '_blank'));
-    list.appendChild(li);
+  const grid = document.createElement('div');
+  grid.className = 'eds-media-grid';
+  grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px;';
+  
+  state.mediaFiles.forEach((file) => {
+    const card = document.createElement('div');
+    card.className = 'eds-media-card';
+    card.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; text-align: center; background: #fff; cursor: pointer; transition: box-shadow 0.2s;';
+    card.addEventListener('mouseenter', () => {
+      card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.boxShadow = 'none';
+    });
+    
+    // クリック時にURLを開く
+    if (file.url) {
+      card.addEventListener('click', () => {
+        window.open(file.url, '_blank');
+      });
+    }
+    
+    const preview = document.createElement('div');
+    preview.className = 'eds-media-preview';
+    preview.style.cssText = 'margin-bottom: 8px; display: flex; align-items: center; justify-content: center; min-height: 120px; background: #f5f5f5; border-radius: 4px; overflow: hidden;';
+    
+    if (file.isVideo) {
+      // 動画の場合はビデオアイコンを表示
+      preview.innerHTML = `
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 5V19L19 12L8 5Z" fill="#666"/>
+        </svg>
+      `;
+    } else if (file.isImage && file.url) {
+      // 画像の場合はプレビューを表示
+      const img = document.createElement('img');
+      img.src = file.url;
+      img.style.cssText = 'max-width: 100%; max-height: 120px; object-fit: contain;';
+      img.onerror = () => {
+        preview.innerHTML = '📷';
+        preview.style.cssText += 'font-size: 48px;';
+      };
+      preview.appendChild(img);
+    } else {
+      // その他の場合はファイルアイコンを表示
+      preview.innerHTML = '📄';
+      preview.style.cssText += 'font-size: 48px;';
+    }
+    
+    const name = document.createElement('div');
+    name.className = 'eds-media-name';
+    name.style.cssText = 'font-size: 11px; color: #000; font-weight: normal; word-break: break-all;';
+    name.textContent = file.fileName || file.path.split('/').pop();
+    
+    card.appendChild(preview);
+    card.appendChild(name);
+    grid.appendChild(card);
   });
-  root.appendChild(list);
+  
+  root.appendChild(grid);
 }
 
 function renderSource(state, detail) {

@@ -994,7 +994,14 @@
       codeBasePath: state.codeBasePath,
       mediaBasePath: state.mediaBasePath,
       codeTree: state.codeTree,
-      mediaFiles: state.mediaFiles,
+      mediaFiles: state.mediaFiles ? state.mediaFiles.map((file) => ({
+        path: file.path,
+        fileName: file.fileName,
+        extension: file.extension,
+        isVideo: file.isVideo,
+        isImage: file.isImage,
+        url: file.url,
+      })) : null,
     };
   }
   
@@ -1091,6 +1098,104 @@
     return filtered.map((entry) => entry.path);
   }
 
+  function collectMediaFiles() {
+    const mediaMap = new Map(); // fileName -> url
+    // Media Busのファイル名パターン: media_ + 10文字以上のハッシュ値（16進数）+ 拡張子
+    const mediaFilePattern = /^media_[0-9a-fA-F]{10,}\.[a-zA-Z0-9]+$/;
+    
+    const addFromUrl = (urlString) => {
+      try {
+        if (!urlString || typeof urlString !== 'string') return;
+        
+        // URLにmedia_が含まれていない場合はスキップ
+        if (!urlString.includes('media_')) return;
+        
+        // URLを解析（相対URLの場合は現在のページのURLをベースにする）
+        let url;
+        try {
+          url = new URL(urlString);
+        } catch (e) {
+          // 相対URLの場合は現在のページのURLをベースにする
+          url = new URL(urlString, window.location.href);
+        }
+        
+        const { pathname, origin } = url;
+        
+        // パスからファイル名を抽出
+        // 例: /developer/media_1a70c29a5d772d0dc5f0cd8d513af41df5bb8177d.jpeg → media_1a70c29a5d772d0dc5f0cd8d513af41df5bb8177d.jpeg
+        const pathParts = pathname.split('/').filter(p => p);
+        let fileName = pathParts[pathParts.length - 1];
+        
+        if (!fileName) return;
+        
+        // ファイル名にクエリパラメータが含まれている場合は除去
+        fileName = fileName.split('?')[0];
+        
+        // Media Busのファイル名パターンに一致するか確認
+        if (mediaFilePattern.test(fileName)) {
+          // クエリパラメータを除去したURLを保存
+          const urlWithoutQuery = `${origin}${pathname}`;
+          mediaMap.set(fileName, urlWithoutQuery);
+          console.log('[EDS Inspector] ✓ Found media file:', fileName);
+        } else {
+          // デバッグ用: パターンに一致しないファイル名をログ出力
+          if (fileName.startsWith('media_')) {
+            console.log('[EDS Inspector] ✗ Media file pattern mismatch:', fileName);
+            console.log('[EDS Inspector]   Pattern:', mediaFilePattern.toString());
+            console.log('[EDS Inspector]   Full URL:', urlString);
+            console.log('[EDS Inspector]   Pathname:', pathname);
+          }
+        }
+      } catch (e) {
+        // URL解析エラーは無視（相対URLなど）
+        if (urlString.includes('media_')) {
+          console.warn('[EDS Inspector] Error parsing URL:', urlString, e);
+        }
+      }
+    };
+
+    // Performance APIからネットワークリクエストを収集
+    const resources = performance.getEntriesByType('resource');
+    console.log('[EDS Inspector] Checking', resources.length, 'network resources for media files...');
+    let mediaCount = 0;
+    resources.forEach((entry) => {
+      if (entry.name && entry.name.includes('media_')) {
+        mediaCount++;
+        addFromUrl(entry.name);
+      }
+    });
+    console.log('[EDS Inspector] Found', mediaCount, 'resources containing "media_"');
+    
+    // DOMからimg/video/sourceタグのURLを収集（Lazy Load対応）
+    // data-srcやsrcsetも含めて検出
+    const mediaSelectors = [
+      'img[src*="media_"]',
+      'img[data-src*="media_"]',
+      'video[src*="media_"]',
+      'video[data-src*="media_"]',
+      'source[src*="media_"]',
+      'source[srcset*="media_"]',
+      'picture source[srcset*="media_"]',
+    ];
+    const mediaElements = document.querySelectorAll(mediaSelectors.join(', '));
+    console.log('[EDS Inspector] Checking', mediaElements.length, 'DOM elements for media files...');
+    mediaElements.forEach((el) => {
+      // src, data-src, srcsetの順で確認
+      const url = el.getAttribute('src') || 
+                  el.getAttribute('data-src') || 
+                  el.getAttribute('srcset');
+      if (url) {
+        // srcsetの場合は最初のURLを取得
+        const firstUrl = url.split(',')[0].trim().split(' ')[0];
+        addFromUrl(firstUrl);
+      }
+    });
+    
+    const collectedFiles = Array.from(mediaMap.keys());
+    console.log('[EDS Inspector] Collected media files:', collectedFiles.length, 'files:', collectedFiles);
+    return mediaMap;
+  }
+
   async function loadCodeAndMedia() {
     if (state.codeBasePath) {
       try {
@@ -1102,16 +1207,71 @@
         console.warn('Code Bus listing failed', err);
       }
     }
+    
+    // ネットワークリクエストからMedia Busファイルを収集
+    const networkMediaFiles = collectMediaFiles();
+    
+    // Admin APIからもMedia Busファイルを取得（フォールバック）
+    let adminMediaFiles = [];
     if (state.mediaBasePath) {
       try {
-        const mediaPaths = await fetchAdminListing(state.mediaBasePath, (entry) => entry.type === 'file' && entry.path.includes('media_'));
+        // Media Busのファイル名パターン: media_ + 10文字以上のハッシュ値（16進数）+ 拡張子
+        const mediaFilePattern = /^media_[0-9a-fA-F]{10,}\.[a-zA-Z0-9]+$/;
+        const mediaPaths = await fetchAdminListing(state.mediaBasePath, (entry) => {
+          if (entry.type !== 'file') return false;
+          // パスからファイル名を抽出
+          const fileName = entry.path.split('/').pop();
+          return mediaFilePattern.test(fileName);
+        });
         if (mediaPaths) {
-          state.mediaFiles = mediaPaths.map((path) => ({ path }));
+          adminMediaFiles = mediaPaths.map((path) => {
+            const fileName = path.split('/').pop();
+            const extension = fileName.split('.').pop().toLowerCase();
+            const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension);
+            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(extension);
+            return { 
+              path,
+              fileName,
+              extension,
+              isVideo,
+              isImage,
+              url: state.mediaBasePath ? `${state.mediaBasePath}${path}` : null,
+            };
+          });
         }
       } catch (err) {
         console.warn('Media Bus listing failed', err);
       }
     }
+    
+    // ネットワークリクエストから検出したファイルとAdmin APIから取得したファイルをマージ
+    const mediaFilesMap = new Map();
+    
+    // Admin APIから取得したファイルを追加
+    adminMediaFiles.forEach((file) => {
+      mediaFilesMap.set(file.fileName, file);
+    });
+    
+    // ネットワークリクエストから検出したファイルを追加（既存のものは上書きしない）
+    networkMediaFiles.forEach((url, fileName) => {
+      if (!mediaFilesMap.has(fileName)) {
+        const extension = fileName.split('.').pop().toLowerCase();
+        const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension);
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(extension);
+        mediaFilesMap.set(fileName, {
+          path: `/${fileName}`,
+          fileName,
+          extension,
+          isVideo,
+          isImage,
+          url,
+        });
+      }
+    });
+    
+    state.mediaFiles = Array.from(mediaFilesMap.values());
+    console.log('[EDS Inspector] Total media files:', state.mediaFiles.length);
+    console.log('[EDS Inspector] Media files:', state.mediaFiles.map(f => f.fileName));
   }
 
   async function resolveConfig() {
@@ -1168,6 +1328,10 @@
     state.sections = detectSections(mainSSR, mainLive);
     state.blocks = detectBlocks(mainSSR, mainLive, blockResources);
     state.icons = await detectIcons(mainSSR, mainLive, iconResources);
+    
+    // Media Busファイルも検出
+    await loadCodeAndMedia();
+    
     buildOverlays();
     refreshOverlayPositions();
     
@@ -1243,6 +1407,7 @@
   let updateTimeout = null;
   let mutationObserver = null;
   let performanceObserver = null;
+  let mediaPerformanceObserver = null;
   
   function scheduleAutoUpdate(delay = 500) {
     if (!autoUpdateEnabled) return;
@@ -1256,8 +1421,7 @@
     updateTimeout = setTimeout(async () => {
       try {
         console.log('[EDS Inspector Content] Auto-updating page analysis...');
-        await analyzePage();
-        await loadCodeAndMedia();
+        await analyzePage(); // analyzePage内でloadCodeAndMediaが呼ばれる
         console.log('[EDS Inspector Content] Auto-update complete');
       } catch (err) {
         console.error('[EDS Inspector Content] Error in auto-update:', err);
@@ -1286,6 +1450,17 @@
           if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
             shouldUpdate = true;
           }
+          // Lazy Load対応: src属性が変更された場合（data-srcからsrcに変更されたとき）
+          if (mutation.type === 'attributes' && 
+              (mutation.attributeName === 'src' || mutation.attributeName === 'data-src')) {
+            const target = mutation.target;
+            if (target.tagName === 'IMG' || target.tagName === 'VIDEO' || target.tagName === 'SOURCE') {
+              const url = target.getAttribute('src') || target.getAttribute('data-src');
+              if (url && url.includes('media_')) {
+                shouldUpdate = true;
+              }
+            }
+          }
         }
       });
       
@@ -1300,7 +1475,7 @@
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['class'],
+        attributeFilter: ['class', 'src', 'data-src'], // Lazy Load対応: src属性の変更も監視
       });
     }
     
