@@ -168,50 +168,125 @@
 
   function detectSections(mainSSR, mainLive) {
     const sections = [];
-    const seen = new Set();
+    const seenElements = new Set();
     
-    // まず、data-section-id属性がある要素を優先的に検出
-    const sectionIdElements = mainSSR.querySelectorAll('[data-section-id]');
-    sectionIdElements.forEach((el, index) => {
-      if (!(el instanceof HTMLElement)) return;
-      const path = computeElementPath(el, mainSSR);
-      const liveElement = findElementByPath(mainLive, path);
-      if (!liveElement) return;
-      const key = `section-id-${el.getAttribute('data-section-id')}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      const label = el.getAttribute('data-section-id') || el.className || `section-${index + 1}`;
-      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
-    });
+    console.log('[EDS Inspector] Detecting sections...');
+    console.log('[EDS Inspector] SSR main children:', Array.from(mainSSR.children).map(c => c.tagName));
+    console.log('[EDS Inspector] Live main children:', Array.from(mainLive.children).map(c => c.tagName));
     
-    // 次に、<main>の直接の子要素を検出（既存のロジック）
-    const directChildren = Array.from(mainSSR.children);
-    directChildren.forEach((el, index) => {
-      if (!(el instanceof HTMLElement)) return;
-      const path = computeElementPath(el, mainSSR);
-      const liveElement = findElementByPath(mainLive, path);
-      if (!liveElement) return;
-      const key = `direct-child-${index}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      const label = el.getAttribute('data-section-id') || el.className || `section-${sections.length + 1}`;
-      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
-    });
+    // EDSの構造に基づくSection検出:
+    // 1. Blocksとdefault contentは常にsectionでラップされる
+    // 2. Sectionは<main>の直接の子要素として存在する
+    // 3. Section Metadataブロックがある場合、それがsectionにdata属性を追加する
     
-    // 最後に、<main>内のすべての<section>要素を検出
-    const sectionElements = mainSSR.querySelectorAll('section');
-    sectionElements.forEach((el) => {
-      if (!(el instanceof HTMLElement)) return;
+    // <main>の直接の子要素をsectionとして検出（これが最も重要）
+    const ssrChildren = Array.from(mainSSR.children);
+    const liveChildren = Array.from(mainLive.children);
+    
+    ssrChildren.forEach((ssrChild, index) => {
+      if (!(ssrChild instanceof HTMLElement)) return;
+      
+      // 対応するライブDOMの要素を見つける
+      // インデックスベースで検出（構造が同じ場合）
+      let liveElement = liveChildren[index];
+      
+      // インデックスが一致しない場合、パスベースで検出を試す
+      if (!liveElement || liveElement.tagName !== ssrChild.tagName) {
+        const path = computeElementPath(ssrChild, mainSSR);
+        liveElement = findElementByPath(mainLive, path);
+      }
+      
+      if (!liveElement) {
+        console.warn('[EDS Inspector] Could not find live element for section at index:', index);
+        return;
+      }
+      
       // 既に検出済みの要素はスキップ
-      const path = computeElementPath(el, mainSSR);
-      const liveElement = findElementByPath(mainLive, path);
-      if (!liveElement) return;
-      // 既に追加されている要素かチェック
-      const alreadyAdded = sections.some(s => s.element === liveElement);
-      if (alreadyAdded) return;
-      const label = el.getAttribute('data-section-id') || el.className || el.id || `section-${sections.length + 1}`;
-      sections.push({ id: `section-${sections.length}`, element: liveElement, label });
+      if (seenElements.has(liveElement)) return;
+      seenElements.add(liveElement);
+      
+      // Section Metadataブロックを探す（section-metadataクラスを持つ要素）
+      let sectionLabel = null;
+      const sectionMetadata = ssrChild.querySelector('.section-metadata');
+      if (sectionMetadata) {
+        // Section Metadataからラベルを抽出
+        const styleCell = sectionMetadata.querySelector('div > div:first-child');
+        if (styleCell) {
+          sectionLabel = styleCell.textContent.trim();
+        }
+      }
+      
+      // data-section-id属性を確認
+      if (!sectionLabel && ssrChild.hasAttribute('data-section-id')) {
+        sectionLabel = ssrChild.getAttribute('data-section-id');
+      }
+      
+      // クラス名からラベルを抽出
+      if (!sectionLabel) {
+        const classes = Array.from(ssrChild.classList);
+        const sectionClass = classes.find(cls => cls.startsWith('section-') && cls !== 'section-metadata');
+        if (sectionClass) {
+          sectionLabel = sectionClass;
+        }
+      }
+      
+      // デフォルトラベル
+      if (!sectionLabel) {
+        sectionLabel = `section-${sections.length + 1}`;
+      }
+      
+      sections.push({ 
+        id: `section-${sections.length}`, 
+        element: liveElement, 
+        label: sectionLabel 
+      });
+      
+      console.log('[EDS Inspector] Detected section:', sectionLabel, 'element:', liveElement);
     });
+    
+    // <section>要素も検出（HTML5のセマンティック要素として）
+    // ただし、<main>の直接の子要素でない場合は、親sectionの一部として扱う
+    const sectionElements = mainSSR.querySelectorAll('section');
+    sectionElements.forEach((ssrSection) => {
+      if (!(ssrSection instanceof HTMLElement)) return;
+      
+      // <main>の直接の子要素の場合は既に検出済み
+      if (ssrSection.parentElement === mainSSR) return;
+      
+      const path = computeElementPath(ssrSection, mainSSR);
+      const liveSection = findElementByPath(mainLive, path);
+      if (!liveSection) return;
+      
+      // 既に検出済みの要素はスキップ
+      if (seenElements.has(liveSection)) return;
+      
+      // 親要素が既にsectionとして検出されている場合はスキップ
+      let parent = liveSection.parentElement;
+      let isChildOfDetectedSection = false;
+      while (parent && parent !== mainLive) {
+        if (seenElements.has(parent)) {
+          isChildOfDetectedSection = true;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      
+      if (isChildOfDetectedSection) return;
+      
+      seenElements.add(liveSection);
+      const label = ssrSection.getAttribute('data-section-id') || 
+                    ssrSection.className || 
+                    ssrSection.id || 
+                    `section-${sections.length + 1}`;
+      sections.push({ 
+        id: `section-${sections.length}`, 
+        element: liveSection, 
+        label 
+      });
+      console.log('[EDS Inspector] Detected nested section:', label);
+    });
+    
+    console.log('[EDS Inspector] Detected sections:', sections.map(s => ({ label: s.label, tagName: s.element.tagName })));
     
     return sections;
   }
@@ -324,6 +399,26 @@
     // SSRマークアップから直接セマンティックな要素を検出する
     console.log('[EDS Inspector] Detecting default content blocks...');
     
+    // 既に検出されたブロック要素を収集（ブロック内のDefault Contentは検出しないため）
+    const detectedBlockElements = new Set();
+    blocks.forEach((block) => {
+      detectedBlockElements.add(block.element);
+    });
+    
+    // ブロッククラスを持つ要素も収集（ネットワークリクエストに存在するブロック）
+    blockResources.forEach((blockName) => {
+      try {
+        const blockElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
+        blockElements.forEach((el) => {
+          if (el instanceof HTMLElement && mainLive.contains(el)) {
+            detectedBlockElements.add(el);
+          }
+        });
+      } catch (e) {
+        // 無視
+      }
+    });
+    
     DEFAULT_CONTENT_MAP.forEach((contentDef) => {
       // SSRマークアップから該当する要素を検出
       const ssrElements = mainSSR.querySelectorAll(contentDef.selector);
@@ -365,8 +460,29 @@
           // 既に検出済みの要素はスキップ
           if (seenElements.has(pathBasedElement)) return;
           
-          // ライブDOMでも<p>タグ内かどうかを確認
+          // ブロック内の要素は検出しない
           let liveParent = pathBasedElement.parentElement;
+          let isInsideBlock = false;
+          while (liveParent && liveParent !== mainLive) {
+            if (detectedBlockElements.has(liveParent)) {
+              isInsideBlock = true;
+              break;
+            }
+            // ブロッククラスを持つ要素もチェック
+            const parentClasses = Array.from(liveParent.classList || []);
+            if (parentClasses.some(cls => blockResources.has(cls))) {
+              isInsideBlock = true;
+              break;
+            }
+            liveParent = liveParent.parentElement;
+          }
+          
+          if (isInsideBlock) {
+            return;
+          }
+          
+          // ライブDOMでも<p>タグ内かどうかを確認
+          liveParent = pathBasedElement.parentElement;
           let isInsideLiveParagraph = false;
           while (liveParent && liveParent !== mainLive) {
             if (liveParent.tagName.toLowerCase() === 'p') {
@@ -400,8 +516,29 @@
         // main要素の子孫要素であることを確認
         if (!mainLive.contains(liveElement)) return;
         
-        // ライブDOMでも<p>タグ内かどうかを確認
+        // ブロック内の要素は検出しない
         let liveParent = liveElement.parentElement;
+        let isInsideBlock = false;
+        while (liveParent && liveParent !== mainLive) {
+          if (detectedBlockElements.has(liveParent)) {
+            isInsideBlock = true;
+            break;
+          }
+          // ブロッククラスを持つ要素もチェック
+          const parentClasses = Array.from(liveParent.classList || []);
+          if (parentClasses.some(cls => blockResources.has(cls))) {
+            isInsideBlock = true;
+            break;
+          }
+          liveParent = liveParent.parentElement;
+        }
+        
+        if (isInsideBlock) {
+          return;
+        }
+        
+        // ライブDOMでも<p>タグ内かどうかを確認
+        liveParent = liveElement.parentElement;
         let isInsideLiveParagraph = false;
         while (liveParent && liveParent !== mainLive) {
           if (liveParent.tagName.toLowerCase() === 'p') {
@@ -472,7 +609,20 @@
 
   function createOverlayElement(item, type) {
     const el = document.createElement('div');
-    el.className = `eds-overlay eds-overlay--${type}`;
+    
+    // タイプに基づいてクラスを設定
+    if (type === 'section') {
+      el.className = 'eds-overlay eds-overlay--section';
+    } else {
+      // ブロックのカテゴリに基づいて、BlockかDefault Contentかを判断
+      const isDefaultContent = item.category && item.category !== 'block';
+      if (isDefaultContent) {
+        el.className = 'eds-overlay eds-overlay--default-content';
+      } else {
+        el.className = 'eds-overlay eds-overlay--block';
+      }
+    }
+    
     el.dataset.overlayId = item.id;
     const label = document.createElement('div');
     label.className = 'eds-overlay__label';
