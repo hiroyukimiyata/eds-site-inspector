@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "EDS Site Inspector",
+  "version": "0.1.0",
+  "description": "Analyze Edge Delivery Services pages to visualize sections, blocks, and associated code/media sources.",
+  "permissions": ["scripting", "activeTab", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Inspect EDS page"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content.css"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
