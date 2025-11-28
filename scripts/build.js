@@ -26,7 +26,12 @@ async function build() {
   fs.rmSync(outdir, { recursive: true, force: true });
 
   await esbuild.build({
-    entryPoints: [path.resolve(__dirname, '../src/background.js'), path.resolve(__dirname, '../src/content.js')],
+    entryPoints: [
+      path.resolve(__dirname, '../src/background.js'),
+      path.resolve(__dirname, '../src/content.js'),
+      path.resolve(__dirname, '../src/devtools.js'),
+      path.resolve(__dirname, '../src/panel.js'),
+    ],
     bundle: true,
     outdir,
     minify: false,
@@ -36,7 +41,7 @@ async function build() {
   });
 
   await esbuild.build({
-    entryPoints: [path.resolve(__dirname, '../src/styles/content.css')],
+    entryPoints: [path.resolve(__dirname, '../src/styles/content.css'), path.resolve(__dirname, '../src/styles/panel.css')],
     bundle: true,
     outdir,
     minify: false,
@@ -45,6 +50,8 @@ async function build() {
   });
 
   copyFile(path.resolve(__dirname, '../src/manifest.json'), path.join(outdir, 'manifest.json'));
+  copyFile(path.resolve(__dirname, '../src/devtools.html'), path.join(outdir, 'devtools.html'));
+  copyFile(path.resolve(__dirname, '../src/panel.html'), path.join(outdir, 'panel.html'));
   copyDir(path.resolve(__dirname, '../public'), outdir);
 
   console.log('Build complete. Load the dist/ directory as an unpacked extension.');

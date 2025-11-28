@@ -7,13 +7,6 @@
 
   const UI_IDS = {
     overlayRoot: 'eds-inspector-overlay-root',
-    panel: 'eds-inspector-panel',
-  };
-
-  const COLORS = {
-    section: '#3b82f6',
-    block: '#f59e0b',
-    highlight: '#f97316',
   };
 
   const DEFAULT_CONTENT_MAP = [
@@ -38,6 +31,7 @@
     mediaBasePath: null,
     codeTree: null,
     mediaFiles: null,
+    ssrDocument: null,
   };
 
   function createOverlayRoot() {
@@ -45,71 +39,47 @@
     if (root) return root;
     root = document.createElement('div');
     root.id = UI_IDS.overlayRoot;
-    root.style.position = 'fixed';
+    root.style.position = 'absolute';
     root.style.top = '0';
     root.style.left = '0';
     root.style.width = '100%';
-    root.style.height = '100%';
+    root.style.height = `${document.documentElement.scrollHeight}px`;
     root.style.pointerEvents = 'none';
     root.style.zIndex = '2147483646';
     document.body.appendChild(root);
     return root;
   }
 
-  function createPanelRoot() {
-    let panel = document.getElementById(UI_IDS.panel);
-    if (panel) return panel;
-    panel = document.createElement('div');
-    panel.id = UI_IDS.panel;
-    panel.className = 'eds-panel';
-    panel.innerHTML = `
-      <div class="eds-panel__header">
-        <div class="eds-panel__title">EDS Site Inspector</div>
-        <button class="eds-panel__close" title="Close">×</button>
-      </div>
-      <div class="eds-panel__tabs">
-        <button data-tab="control" class="active">Control</button>
-        <button data-tab="blocks">Blocks</button>
-        <button data-tab="code">Code Bus</button>
-        <button data-tab="media">Media Bus</button>
-        <button data-tab="source">Source</button>
-      </div>
-      <div class="eds-panel__content" data-tab-content="control"></div>
-      <div class="eds-panel__content" data-tab-content="blocks" hidden></div>
-      <div class="eds-panel__content" data-tab-content="code" hidden></div>
-      <div class="eds-panel__content" data-tab-content="media" hidden></div>
-      <div class="eds-panel__content" data-tab-content="source" hidden></div>
-    `;
-    document.body.appendChild(panel);
-    panel.querySelector('.eds-panel__close')?.addEventListener('click', () => {
-      destroy();
-    });
-    panel.querySelectorAll('.eds-panel__tabs button').forEach((btn) => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
-    return panel;
+  function ensureOverlayRootSizing(root) {
+    if (!root) return;
+    const doc = document.documentElement;
+    const body = document.body || { scrollHeight: 0, scrollWidth: 0 };
+    const height = Math.max(doc.scrollHeight, doc.clientHeight, body.scrollHeight, body.clientHeight || 0);
+    const width = Math.max(doc.scrollWidth, doc.clientWidth, body.scrollWidth, body.clientWidth || 0);
+    root.style.height = `${height}px`;
+    root.style.width = `${width}px`;
   }
 
-  function switchTab(tab) {
-    const panel = document.getElementById(UI_IDS.panel);
-    if (!panel) return;
-    panel.querySelectorAll('.eds-panel__tabs button').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.tab === tab);
-    });
-    panel.querySelectorAll('[data-tab-content]').forEach((content) => {
-      content.hidden = content.dataset.tabContent !== tab;
-    });
+  function computeElementPath(el, root) {
+    const path = [];
+    let current = el;
+    while (current && current !== root) {
+      const parent = current.parentElement;
+      if (!parent) break;
+      const idx = Array.from(parent.children).indexOf(current);
+      path.unshift(idx);
+      current = parent;
+    }
+    return path;
   }
 
-  function detectSections(main) {
-    const sections = [];
-    const candidates = Array.from(main.children);
-    candidates.forEach((el, index) => {
-      if (!(el instanceof HTMLElement)) return;
-      const label = el.getAttribute('data-section-id') || el.className || `section-${index + 1}`;
-      sections.push({ id: `section-${index}`, element: el, label });
-    });
-    return sections;
+  function findElementByPath(root, path) {
+    let current = root;
+    for (const idx of path) {
+      if (!current || !current.children || !current.children[idx]) return null;
+      current = current.children[idx];
+    }
+    return current;
   }
 
   function inferBlockName(el) {
@@ -121,22 +91,68 @@
     return el.tagName.toLowerCase();
   }
 
-  function detectBlocks(main) {
-    const blocks = [];
-    const seen = new Set();
-    const blockSelectors = ['[data-block-name]', '.block'];
-    DEFAULT_CONTENT_MAP.forEach((entry) => blockSelectors.push(entry.selector));
-    const candidates = main.querySelectorAll(blockSelectors.join(','));
+  function formatHtmlSnippet(el) {
+    const clone = el.cloneNode(true);
+    const lines = clone.outerHTML.split('\n');
+    return lines.map((line) => line.trim()).join('\n');
+  }
+
+  function collectBlockResourceNames() {
+    const blockNames = new Set();
+    const addFromUrl = (urlString) => {
+      try {
+        const { pathname } = new URL(urlString, window.location.href);
+        const match = pathname.match(/\/blocks\/([^/]+)\//);
+        if (match && match[1]) blockNames.add(match[1]);
+      } catch (e) {
+        /* noop */
+      }
+    };
+
+    performance.getEntriesByType('resource').forEach((entry) => addFromUrl(entry.name));
+    document.querySelectorAll('link[href*="/blocks/"], script[src*="/blocks/"]').forEach((el) => {
+      const url = el.getAttribute('href') || el.getAttribute('src');
+      if (url) addFromUrl(url);
+    });
+    return blockNames;
+  }
+
+  function detectSections(mainSSR, mainLive) {
+    const sections = [];
+    const candidates = Array.from(mainSSR.children);
     candidates.forEach((el, index) => {
       if (!(el instanceof HTMLElement)) return;
+      const path = computeElementPath(el, mainSSR);
+      const liveElement = findElementByPath(mainLive, path);
+      if (!liveElement) return;
+      const label = el.getAttribute('data-section-id') || el.className || `section-${index + 1}`;
+      sections.push({ id: `section-${index}`, element: liveElement, label });
+    });
+    return sections;
+  }
+
+  function detectBlocks(mainSSR, mainLive, blockResources) {
+    const blocks = [];
+    const seen = new Set();
+    const selectors = ['[data-block-name]', '.block'];
+    DEFAULT_CONTENT_MAP.forEach((entry) => selectors.push(entry.selector));
+    const candidates = mainSSR.querySelectorAll(selectors.join(','));
+    candidates.forEach((el, index) => {
+      if (!(el instanceof HTMLElement)) return;
+      const path = computeElementPath(el, mainSSR);
+      const liveElement = findElementByPath(mainLive, path);
+      if (!liveElement) return;
       const key = el.dataset.blockName || el.className || `${el.tagName}-${index}`;
       if (seen.has(key)) return;
+      const name = inferBlockName(el);
+      if (!blockResources.has(name)) return; // not backed by /blocks/{name}
       seen.add(key);
       blocks.push({
         id: `block-${index}`,
-        element: el,
-        name: inferBlockName(el),
+        element: liveElement,
+        name,
         tagName: el.tagName.toLowerCase(),
+        classes: liveElement.className || '',
       });
     });
     return blocks;
@@ -155,8 +171,6 @@
       evt.preventDefault();
       if (type === 'block') {
         state.selectedBlockId = item.id;
-        renderSourcePanel(item);
-        switchTab('source');
       }
     });
     return el;
@@ -165,6 +179,7 @@
   function refreshOverlayPositions() {
     const root = document.getElementById(UI_IDS.overlayRoot);
     if (!root) return;
+    ensureOverlayRootSizing(root);
     const viewportOffset = { x: window.scrollX, y: window.scrollY };
     state.overlays.forEach((overlay) => {
       const { element, target } = overlay;
@@ -199,191 +214,17 @@
     refreshOverlayPositions();
   }
 
-  function renderControlPanel() {
-    const panel = document.querySelector('[data-tab-content="control"]');
-    if (!panel) return;
-    panel.innerHTML = '';
-    const overlayToggle = document.createElement('div');
-    overlayToggle.className = 'eds-toggle-group';
-    overlayToggle.innerHTML = `
-      <label><input type="checkbox" data-toggle="sections" ${state.overlaysEnabled.sections ? 'checked' : ''}/> Sections overlay</label>
-      <label><input type="checkbox" data-toggle="blocks" ${state.overlaysEnabled.blocks ? 'checked' : ''}/> Blocks overlay</label>
-    `;
-    overlayToggle.querySelectorAll('input[type="checkbox"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        const key = input.dataset.toggle;
-        state.overlaysEnabled[key] = input.checked;
-        state.overlays.forEach((overlay) => {
-          if (key === 'sections' && overlay.item.id.startsWith('section-')) overlay.visible = input.checked;
-          if (key === 'blocks' && overlay.item.id.startsWith('block-')) overlay.visible = input.checked;
-        });
-        refreshOverlayPositions();
-      });
-    });
-
-    const actions = document.createElement('div');
-    actions.className = 'eds-actions';
-    const reanalyze = document.createElement('button');
-    reanalyze.textContent = 'Re-run analysis';
-    reanalyze.addEventListener('click', analyzePage);
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Remove overlays';
-    closeBtn.addEventListener('click', destroy);
-    actions.append(reanalyze, closeBtn);
-
-    const info = document.createElement('p');
-    info.textContent = 'Click the extension icon to re-inject if the page reloads. Overlays highlight sections and blocks detected in the current page.';
-
-    panel.append(overlayToggle, actions, info);
-  }
-
-  function renderBlocksPanel() {
-    const panel = document.querySelector('[data-tab-content="blocks"]');
-    if (!panel) return;
-    panel.innerHTML = '';
-    if (!state.blocks.length) {
-      panel.textContent = 'No blocks detected inside <main>.';
-      return;
-    }
-    const list = document.createElement('ul');
-    list.className = 'eds-block-list';
-    state.blocks.forEach((block) => {
-      const item = document.createElement('li');
-      item.innerHTML = `<span class="eds-block-list__name">${block.name}</span><span class="eds-block-list__tag">${block.tagName}</span>`;
-      item.addEventListener('mouseenter', () => setHighlight(block.id));
-      item.addEventListener('mouseleave', () => setHighlight(null));
-      item.addEventListener('click', () => {
-        state.selectedBlockId = block.id;
-        renderSourcePanel(block);
-        switchTab('source');
-      });
-      list.appendChild(item);
-    });
-    panel.appendChild(list);
-  }
-
-  function formatHtmlSnippet(el) {
-    const clone = el.cloneNode(true);
-    clone.querySelectorAll('[data-eds-overlay-ignore]');
-    const lines = clone.outerHTML.split('\n');
-    return lines.map((line) => line.trim()).join('\n');
-  }
-
-  function renderSourcePanel(block) {
-    const panel = document.querySelector('[data-tab-content="source"]');
-    if (!panel) return;
-    panel.innerHTML = '';
-    if (!block) {
-      panel.textContent = 'Click a block overlay or list item to inspect its HTML markup.';
-      return;
-    }
-    const meta = document.createElement('div');
-    meta.className = 'eds-meta';
-    meta.innerHTML = `
-      <div><strong>Name:</strong> ${block.name}</div>
-      <div><strong>Tag:</strong> ${block.tagName}</div>
-      <div><strong>Classes:</strong> ${(block.element.className || '(none)')}</div>
-    `;
-
-    const pre = document.createElement('pre');
-    pre.className = 'eds-code';
-    pre.textContent = formatHtmlSnippet(block.element);
-    panel.append(meta, pre);
-  }
-
-  function renderCodeTree(tree, container) {
-    container.innerHTML = '';
-    if (!tree) {
-      container.textContent = 'Code Bus not detected on this page.';
-      return;
-    }
-    const ul = document.createElement('ul');
-    ul.className = 'eds-tree';
-    function addNode(node, parent) {
-      const li = document.createElement('li');
-      li.textContent = node.name;
-      if (node.children && node.children.length) {
-        li.classList.add('has-children');
-        const childList = document.createElement('ul');
-        node.children.forEach((child) => addNode(child, childList));
-        li.appendChild(childList);
-      }
-      if (node.path) {
-        li.title = node.path;
-        li.addEventListener('click', (evt) => {
-          evt.stopPropagation();
-          window.open(`${state.codeBasePath}${node.path}`, '_blank');
-        });
-      }
-      parent.appendChild(li);
-    }
-    addNode(tree, ul);
-    container.appendChild(ul);
-  }
-
-  function renderMediaList(list, container) {
-    container.innerHTML = '';
-    if (!list) {
-      container.textContent = 'Media Bus not detected on this page.';
-      return;
-    }
-    if (!list.length) {
-      container.textContent = 'No media_ files found.';
-      return;
-    }
-    const grid = document.createElement('div');
-    grid.className = 'eds-media-grid';
-    list.forEach((item) => {
-      const card = document.createElement('div');
-      card.className = 'eds-media-card';
-      const isImage = /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(item.path);
-      if (isImage) {
-        const img = document.createElement('img');
-        img.src = `${state.mediaBasePath}${item.path}`;
-        img.alt = item.path;
-        card.appendChild(img);
-      } else {
-        const placeholder = document.createElement('div');
-        placeholder.className = 'eds-media-card__placeholder';
-        placeholder.textContent = 'media';
-        card.appendChild(placeholder);
-      }
-      const caption = document.createElement('div');
-      caption.className = 'eds-media-card__caption';
-      caption.textContent = item.path;
-      card.appendChild(caption);
-      card.addEventListener('click', () => window.open(`${state.mediaBasePath}${item.path}`, '_blank'));
-      grid.appendChild(card);
-    });
-    container.appendChild(grid);
-  }
-
-  function renderCodePanel() {
-    const panel = document.querySelector('[data-tab-content="code"]');
-    if (!panel) return;
-    panel.innerHTML = '<div class="eds-loading">Loading Code Bus…</div>';
-    if (!state.codeBasePath) {
-      panel.textContent = 'Code Bus path could not be determined from this page.';
-      return;
-    }
-    if (state.codeTree) {
-      renderCodeTree(state.codeTree, panel);
-      return;
-    }
-  }
-
-  function renderMediaPanel() {
-    const panel = document.querySelector('[data-tab-content="media"]');
-    if (!panel) return;
-    panel.innerHTML = '<div class="eds-loading">Loading Media Bus…</div>';
-    if (!state.mediaBasePath) {
-      panel.textContent = 'Media Bus path could not be determined from this page.';
-      return;
-    }
-    if (state.mediaFiles) {
-      renderMediaList(state.mediaFiles, panel);
-      return;
-    }
+  function serializeState() {
+    return {
+      sections: state.sections.map((section) => ({ id: section.id, label: section.label })),
+      blocks: state.blocks.map((block) => ({ id: block.id, name: block.name, tagName: block.tagName, classes: block.classes })),
+      overlaysEnabled: { ...state.overlaysEnabled },
+      selectedBlock: state.selectedBlockId,
+      codeBasePath: state.codeBasePath,
+      mediaBasePath: state.mediaBasePath,
+      codeTree: state.codeTree,
+      mediaFiles: state.mediaFiles,
+    };
   }
 
   function buildTreeFromPaths(paths) {
@@ -438,11 +279,9 @@
         const paths = await fetchAdminListing(state.codeBasePath, (entry) => entry.type === 'file');
         if (paths && paths.length) {
           state.codeTree = buildTreeFromPaths(paths);
-          renderCodePanel();
         }
       } catch (err) {
-        const panel = document.querySelector('[data-tab-content="code"]');
-        if (panel) panel.textContent = `Code Bus listing failed: ${err.message}`;
+        console.warn('Code Bus listing failed', err);
       }
     }
     if (state.mediaBasePath) {
@@ -450,11 +289,9 @@
         const mediaPaths = await fetchAdminListing(state.mediaBasePath, (entry) => entry.type === 'file' && entry.path.includes('media_'));
         if (mediaPaths) {
           state.mediaFiles = mediaPaths.map((path) => ({ path }));
-          renderMediaPanel();
         }
       } catch (err) {
-        const panel = document.querySelector('[data-tab-content="media"]');
-        if (panel) panel.textContent = `Media Bus listing failed: ${err.message}`;
+        console.warn('Media Bus listing failed', err);
       }
     }
   }
@@ -485,44 +322,150 @@
   function destroy() {
     const overlay = document.getElementById(UI_IDS.overlayRoot);
     if (overlay) overlay.remove();
-    const panel = document.getElementById(UI_IDS.panel);
-    if (panel) panel.remove();
-    window.__edsInspectorInitialized = false;
+    state.overlays = [];
   }
 
-  function renderPanels() {
-    renderControlPanel();
-    renderBlocksPanel();
-    renderCodePanel();
-    renderMediaPanel();
-    renderSourcePanel(null);
-  }
-
-  function analyzePage() {
-    const main = document.querySelector('main');
-    if (!main) {
-      alert('EDS Inspector: <main> element not found.');
-      return;
+  async function parseSSRDocument() {
+    try {
+      const res = await fetch(window.location.href, { credentials: 'include' });
+      const html = await res.text();
+      const parser = new DOMParser();
+      return parser.parseFromString(html, 'text/html');
+    } catch (err) {
+      console.warn('Failed to fetch SSR markup', err);
+      return null;
     }
-    state.sections = detectSections(main);
-    state.blocks = detectBlocks(main);
+  }
+
+  async function analyzePage() {
+    const mainLive = document.querySelector('main');
+    if (!mainLive) {
+      throw new Error('EDS Inspector: <main> element not found.');
+    }
+    const ssrDoc = (state.ssrDocument = (await parseSSRDocument()) || document);
+    const mainSSR = ssrDoc.querySelector('main') || document.querySelector('main');
+    const blockResources = collectBlockResourceNames();
+
+    state.sections = detectSections(mainSSR, mainLive);
+    state.blocks = detectBlocks(mainSSR, mainLive, blockResources);
     buildOverlays();
-    renderPanels();
     refreshOverlayPositions();
+  }
+
+  async function getBlockAssets(blockName) {
+    const assets = [];
+    const seen = new Set();
+    const addAsset = (urlString) => {
+      try {
+        const url = new URL(urlString, window.location.href);
+        if (!url.pathname.includes(`/blocks/${blockName}/`)) return;
+        if (seen.has(url.pathname)) return;
+        seen.add(url.pathname);
+        assets.push({ url: url.toString(), path: url.pathname });
+      } catch (e) {
+        /* noop */
+      }
+    };
+
+    performance.getEntriesByType('resource').forEach((entry) => addAsset(entry.name));
+    document.querySelectorAll('link[href*="/blocks/"], script[src*="/blocks/"]').forEach((el) => {
+      const url = el.getAttribute('href') || el.getAttribute('src');
+      if (url) addAsset(url);
+    });
+
+    const enriched = [];
+    for (const asset of assets) {
+      try {
+        const res = await fetch(asset.url);
+        const text = await res.text();
+        const type = asset.path.split('.').pop() || 'file';
+        enriched.push({ ...asset, type, content: text });
+      } catch (err) {
+        enriched.push({ ...asset, type: 'error', content: `Failed to load asset: ${err.message}` });
+      }
+    }
+    return enriched;
+  }
+
+  async function getBlockDetail(blockId) {
+    const block = state.blocks.find((b) => b.id === blockId);
+    if (!block) return null;
+    const markup = formatHtmlSnippet(block.element);
+    const assets = await getBlockAssets(block.name);
+    return { block, markup, assets };
   }
 
   function attachGlobalListeners() {
     window.addEventListener('scroll', refreshOverlayPositions, true);
     window.addEventListener('resize', refreshOverlayPositions, true);
+    const resizeObserver = new ResizeObserver(() => refreshOverlayPositions());
+    resizeObserver.observe(document.documentElement);
   }
 
   async function init() {
-    createPanelRoot();
     attachGlobalListeners();
     await resolveConfig();
-    analyzePage();
-    loadCodeAndMedia();
+    await analyzePage();
+    await loadCodeAndMedia();
+    return serializeState();
   }
 
-  init();
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.target !== 'eds-content') return;
+    (async () => {
+      try {
+        switch (message.type) {
+          case 'init': {
+            const snapshot = await init();
+            sendResponse(snapshot);
+            break;
+          }
+          case 'reanalyze': {
+            const snapshot = await analyzePage();
+            sendResponse(serializeState());
+            break;
+          }
+          case 'toggle-overlay': {
+            state.overlaysEnabled[message.payload.key] = message.payload.value;
+            state.overlays.forEach((overlay) => {
+              if (message.payload.key === 'sections' && overlay.item.id.startsWith('section-')) overlay.visible = message.payload.value;
+              if (message.payload.key === 'blocks' && overlay.item.id.startsWith('block-')) overlay.visible = message.payload.value;
+            });
+            refreshOverlayPositions();
+            sendResponse(serializeState());
+            break;
+          }
+          case 'destroy': {
+            destroy();
+            sendResponse(serializeState());
+            break;
+          }
+          case 'highlight': {
+            setHighlight(message.payload.id);
+            sendResponse({ ok: true });
+            break;
+          }
+          case 'select-block': {
+            state.selectedBlockId = message.payload.id;
+            sendResponse({ ok: true });
+            break;
+          }
+          case 'state': {
+            sendResponse(serializeState());
+            break;
+          }
+          case 'get-block-detail': {
+            const detail = await getBlockDetail(message.payload.id);
+            sendResponse(detail);
+            break;
+          }
+          default:
+            sendResponse({ ok: false, reason: 'unknown-message' });
+        }
+      } catch (err) {
+        sendResponse({ ok: false, error: err.message });
+      }
+    })();
+    return true;
+  });
 })();
