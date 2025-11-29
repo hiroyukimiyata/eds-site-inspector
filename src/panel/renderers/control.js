@@ -10,65 +10,85 @@ export function renderControl(state, refresh, tabId) {
   const root = document.querySelector('[data-tab-panel="control"]');
   root.innerHTML = '';
 
-  const status = document.createElement('div');
-  status.className = 'eds-status';
-  status.innerHTML = `<span class="eds-status__dot"></span> ${state.sections.length} sections · ${state.blocks.length} blocks`;
-  root.appendChild(status);
+  // ポップアップと同じ構造のコンテナ
+  const overlayControls = document.createElement('div');
+  overlayControls.className = 'overlay-controls';
 
-  const toggleSections = document.createElement('label');
-  toggleSections.className = 'eds-toggle';
-  toggleSections.innerHTML = `<input type="checkbox" ${state.overlaysEnabled.sections ? 'checked' : ''}/> Sections overlay`;
-  toggleSections.querySelector('input').addEventListener('change', async (evt) => {
+  // Sections チェックボックス
+  const sectionsItem = document.createElement('div');
+  sectionsItem.className = 'control-item';
+  const sectionsLabel = document.createElement('label');
+  sectionsLabel.className = 'control-label';
+  const sectionsCheckbox = document.createElement('input');
+  sectionsCheckbox.type = 'checkbox';
+  sectionsCheckbox.id = 'control-toggle-sections';
+  sectionsCheckbox.className = 'control-checkbox';
+  sectionsCheckbox.checked = state.overlaysEnabled?.sections ?? true;
+  sectionsCheckbox.addEventListener('change', async (evt) => {
     try {
       await sendToContent(tabId, 'toggle-overlay', { key: 'sections', value: evt.target.checked });
     } finally {
       refresh();
     }
   });
+  const sectionsText = document.createElement('span');
+  sectionsText.className = 'control-text';
+  sectionsText.textContent = 'Sections';
+  sectionsLabel.appendChild(sectionsCheckbox);
+  sectionsLabel.appendChild(sectionsText);
+  sectionsItem.appendChild(sectionsLabel);
+  overlayControls.appendChild(sectionsItem);
 
-  const toggleBlocks = document.createElement('label');
-  toggleBlocks.className = 'eds-toggle';
-  toggleBlocks.innerHTML = `<input type="checkbox" ${state.overlaysEnabled.blocks ? 'checked' : ''}/> Blocks overlay`;
-  toggleBlocks.querySelector('input').addEventListener('change', async (evt) => {
+  // Blocks チェックボックス
+  const blocksItem = document.createElement('div');
+  blocksItem.className = 'control-item';
+  const blocksLabel = document.createElement('label');
+  blocksLabel.className = 'control-label';
+  const blocksCheckbox = document.createElement('input');
+  blocksCheckbox.type = 'checkbox';
+  blocksCheckbox.id = 'control-toggle-blocks';
+  blocksCheckbox.className = 'control-checkbox';
+  blocksCheckbox.checked = state.overlaysEnabled?.blocks ?? true;
+  blocksCheckbox.addEventListener('change', async (evt) => {
     try {
       await sendToContent(tabId, 'toggle-overlay', { key: 'blocks', value: evt.target.checked });
     } finally {
       refresh();
     }
   });
+  const blocksText = document.createElement('span');
+  blocksText.className = 'control-text';
+  blocksText.textContent = 'Blocks';
+  blocksLabel.appendChild(blocksCheckbox);
+  blocksLabel.appendChild(blocksText);
+  blocksItem.appendChild(blocksLabel);
+  overlayControls.appendChild(blocksItem);
 
-  const actions = document.createElement('div');
-  actions.className = 'eds-actions';
-  const reanalyze = document.createElement('button');
-  reanalyze.className = 'eds-button eds-button--primary';
-  reanalyze.textContent = 'Re-run analysis';
-  reanalyze.addEventListener('click', async () => {
-    reanalyze.disabled = true;
+  // Default Content チェックボックス
+  const defaultItem = document.createElement('div');
+  defaultItem.className = 'control-item';
+  const defaultLabel = document.createElement('label');
+  defaultLabel.className = 'control-label';
+  const defaultCheckbox = document.createElement('input');
+  defaultCheckbox.type = 'checkbox';
+  defaultCheckbox.id = 'control-toggle-default';
+  defaultCheckbox.className = 'control-checkbox';
+  defaultCheckbox.checked = state.overlaysEnabled?.defaultContent ?? true;
+  defaultCheckbox.addEventListener('change', async (evt) => {
     try {
-      await sendToContent(tabId, 'reanalyze');
-      await refresh();
+      await sendToContent(tabId, 'toggle-overlay', { key: 'defaultContent', value: evt.target.checked });
     } finally {
-      reanalyze.disabled = false;
+      refresh();
     }
   });
+  const defaultText = document.createElement('span');
+  defaultText.className = 'control-text';
+  defaultText.textContent = 'Default Content';
+  defaultLabel.appendChild(defaultCheckbox);
+  defaultLabel.appendChild(defaultText);
+  defaultItem.appendChild(defaultLabel);
+  overlayControls.appendChild(defaultItem);
 
-  const hide = document.createElement('button');
-  hide.className = 'eds-button';
-  hide.textContent = 'Remove overlays';
-  hide.addEventListener('click', async () => {
-    try {
-      await sendToContent(tabId, 'destroy');
-    } finally {
-      await refresh();
-    }
-  });
-
-  actions.append(reanalyze, hide);
-  root.append(toggleSections, toggleBlocks, actions);
-
-  const hint = document.createElement('p');
-  hint.className = 'eds-hint';
-  hint.textContent = 'Detection relies on SSR markup; overlays follow live DOM updates on scroll/resize.';
-  root.appendChild(hint);
+  root.appendChild(overlayControls);
 }
 

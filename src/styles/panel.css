@@ -714,3 +714,45 @@ section[hidden] {
 .eds-ast-link a:hover {
   text-decoration: underline;
 }
+
+/* Controlタブ用のスタイル（ポップアップと同じ） */
+.overlay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+}
+
+.control-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s;
+  user-select: none;
+}
+
+.control-label:hover {
+  background: var(--bg-muted);
+}
+
+.control-checkbox {
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  cursor: pointer;
+  accent-color: var(--accent-plain);
+  flex-shrink: 0;
+}
+
+.control-text {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
