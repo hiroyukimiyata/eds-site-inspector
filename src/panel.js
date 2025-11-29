@@ -1,54 +1,12 @@
+import { sendToContent, ensureContentInjected, escapeHtml, highlightCode } from './panel/utils.js';
+import { renderDocs } from './panel/renderers/docs.js';
+
 const tabId = chrome.devtools.inspectedWindow.tabId;
 console.log('[EDS Inspector Panel] Tab ID:', tabId);
 
-async function sendToContent(type, payload = {}) {
-  console.log('[EDS Inspector Panel] Sending message to content:', type, payload);
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, { target: 'eds-content', type, payload });
-    console.log('[EDS Inspector Panel] Received response:', response);
-    return response;
-  } catch (err) {
-    console.error('[EDS Inspector Panel] Failed to send message:', err);
-    throw err;
-  }
-}
-
-async function ensureContentInjected() {
-  console.log('[EDS Inspector Panel] Requesting content script injection...');
-  console.log('[EDS Inspector Panel] Tab ID:', tabId);
-  
-  try {
-    // タイムアウトを設定してメッセージを送信
-    const response = await Promise.race([
-      chrome.runtime.sendMessage({ type: 'eds-init-devtools', tabId }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Could not establish connection. Receiving end does not exist.')), 3000)
-      )
-    ]);
-    console.log('[EDS Inspector Panel] Content script injection response:', response);
-    
-    if (response && response.ok === false) {
-      throw new Error(response.error || 'Content script injection failed');
-    }
-    
-    if (!response) {
-      throw new Error('No response from service worker');
-    }
-    
-    return response;
-  } catch (err) {
-    console.error('[EDS Inspector Panel] Failed to request content script injection:', err);
-    
-    // エラーメッセージを改善
-    const errorMessage = err.message || 'Unknown error';
-    if (errorMessage.includes('Could not establish connection') || 
-        errorMessage.includes('Receiving end does not exist')) {
-      throw new Error('Could not establish connection. Receiving end does not exist.');
-    }
-    
-    throw err;
-  }
-}
+// sendToContentとensureContentInjectedをラップ（tabIdを自動的に渡す）
+const sendToContentWithTabId = (type, payload) => sendToContent(tabId, type, payload);
+const ensureContentInjectedWithTabId = () => ensureContentInjected(tabId);
 
 function switchTab(tab) {
   document.querySelectorAll('.eds-tabs button').forEach((btn) => {
@@ -57,6 +15,11 @@ function switchTab(tab) {
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.tabPanel !== tab;
   });
+  
+  // Docsタブが選択されたときだけrenderDocsを呼ぶ
+  if (tab === 'docs') {
+    renderDocs(tabId);
+  }
 }
 
 function bindTabs() {
@@ -79,7 +42,7 @@ function renderControl(state, refresh) {
   toggleSections.innerHTML = `<input type="checkbox" ${state.overlaysEnabled.sections ? 'checked' : ''}/> Sections overlay`;
   toggleSections.querySelector('input').addEventListener('change', async (evt) => {
     try {
-      await sendToContent('toggle-overlay', { key: 'sections', value: evt.target.checked });
+      await sendToContentWithTabId('toggle-overlay', { key: 'sections', value: evt.target.checked });
     } finally {
       refresh();
     }
@@ -90,7 +53,7 @@ function renderControl(state, refresh) {
   toggleBlocks.innerHTML = `<input type="checkbox" ${state.overlaysEnabled.blocks ? 'checked' : ''}/> Blocks overlay`;
   toggleBlocks.querySelector('input').addEventListener('change', async (evt) => {
     try {
-      await sendToContent('toggle-overlay', { key: 'blocks', value: evt.target.checked });
+      await sendToContentWithTabId('toggle-overlay', { key: 'blocks', value: evt.target.checked });
     } finally {
       refresh();
     }
@@ -104,7 +67,7 @@ function renderControl(state, refresh) {
   reanalyze.addEventListener('click', async () => {
     reanalyze.disabled = true;
     try {
-      await sendToContent('reanalyze');
+      await sendToContentWithTabId('reanalyze');
       await refresh();
     } finally {
       reanalyze.disabled = false;
@@ -116,7 +79,7 @@ function renderControl(state, refresh) {
   hide.textContent = 'Remove overlays';
   hide.addEventListener('click', async () => {
     try {
-      await sendToContent('destroy');
+      await sendToContentWithTabId('destroy');
     } finally {
       await refresh();
     }
@@ -174,6 +137,15 @@ function renderBlocks(state, refresh) {
       nameSpan.textContent = block.name;
       nameSpan.className = 'eds-block-name';
       
+      // ブロック数が1より大きい場合は表示
+      if (block.count && block.count > 1) {
+        const countSpan = document.createElement('span');
+        countSpan.className = 'eds-block-count';
+        countSpan.textContent = ` (${block.count})`;
+        countSpan.style.cssText = 'color: var(--muted); font-size: 11px; margin-left: 4px;';
+        nameSpan.appendChild(countSpan);
+      }
+      
       const tagSpan = document.createElement('span');
       tagSpan.textContent = block.tagName;
       tagSpan.className = 'eds-block-list__tag';
@@ -181,8 +153,8 @@ function renderBlocks(state, refresh) {
       li.appendChild(nameSpan);
       li.appendChild(tagSpan);
       
-      li.addEventListener('mouseenter', () => sendToContent('highlight', { id: block.id }));
-      li.addEventListener('mouseleave', () => sendToContent('highlight', { id: null }));
+      li.addEventListener('mouseenter', () => sendToContentWithTabId('highlight', { id: block.id }));
+      li.addEventListener('mouseleave', () => sendToContentWithTabId('highlight', { id: null }));
       li.addEventListener('click', async () => {
         // 他の選択を解除
         document.querySelectorAll('.eds-block-item').forEach((item) => {
@@ -191,8 +163,8 @@ function renderBlocks(state, refresh) {
         // 選択状態を追加
         li.classList.add('is-selected');
         
-        await sendToContent('select-block', { id: block.id });
-        const detail = await sendToContent('get-block-detail', { id: block.id });
+        await sendToContentWithTabId('select-block', { id: block.id });
+        const detail = await sendToContentWithTabId('get-block-detail', { id: block.id });
         renderBlockDetail(state, detail, refresh);
       });
       
@@ -344,18 +316,30 @@ function renderMedia(state) {
   root.appendChild(grid);
 }
 
-function renderBlockDetail(state, detail, refresh) {
+// 古いMarkdown関数は削除（utils/markdown.jsとpanel/renderers/docs.jsに移動済み）
+
+async function renderBlockDetail(state, detail, refresh) {
   const root = document.querySelector('[data-tab-panel="blocks"]');
   if (!detail || !detail.block) {
     return;
   }
+  
+  // 現在の開閉状態を保存
+  const expandedPaths = new Set();
+  const existingItems = root.querySelectorAll('.eds-asset-item.is-expanded');
+  existingItems.forEach(item => {
+    const path = item.querySelector('.eds-file-card__path')?.textContent;
+    if (path) {
+      expandedPaths.add(path);
+    }
+  });
   
   // 一覧に戻るボタンを作成
   const backButton = document.createElement('button');
   backButton.className = 'eds-back-button';
   backButton.textContent = '← Back to Blocks List';
   backButton.addEventListener('click', async () => {
-    await sendToContent('select-block', { id: null });
+      await sendToContentWithTabId('select-block', { id: null });
     if (refresh) {
       refresh();
     } else {
@@ -377,31 +361,208 @@ function renderBlockDetail(state, detail, refresh) {
     <div><strong>Detected via:</strong> <span class="eds-inline-code">/blocks/${detail.block.name}</span></div>
   `;
 
-  const markup = document.createElement('pre');
-  markup.className = 'eds-code';
-  markup.textContent = detail.markup || 'No markup captured for this block.';
+  root.appendChild(meta);
 
-  root.append(meta, markup);
+  // 同じ名前のブロックを取得（content scriptからすべて取得）
+  const blocksWithSameName = await sendToContentWithTabId('get-blocks-by-name', { name: detail.block.name });
+  const currentBlockIndex = blocksWithSameName.findIndex(b => b.id === detail.block.id);
+  const hasMultipleBlocks = blocksWithSameName.length > 1;
 
+  // Markupをassetsリストの先頭に追加
+  const allAssets = [];
+  const markupContent = detail.markup || 'No markup captured for this block.';
+  if (markupContent !== 'No markup captured for this block.') {
+    allAssets.push({
+      path: 'Markup',
+      type: 'html',
+      content: markupContent,
+      isMarkup: true
+    });
+  }
+  
   if (detail.assets && detail.assets.length) {
+    allAssets.push(...detail.assets);
+  }
+
+  if (allAssets.length > 0) {
+    // 全て開く/閉じるボタン
+    const controls = document.createElement('div');
+    controls.className = 'eds-asset-controls';
+    controls.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px;';
+    
+    const expandAllBtn = document.createElement('button');
+    expandAllBtn.className = 'eds-button';
+    expandAllBtn.textContent = 'Expand All';
+    expandAllBtn.addEventListener('click', () => {
+      document.querySelectorAll('.eds-asset-item').forEach(item => {
+        item.classList.add('is-expanded');
+      });
+    });
+    
+    const collapseAllBtn = document.createElement('button');
+    collapseAllBtn.className = 'eds-button';
+    collapseAllBtn.textContent = 'Collapse All';
+    collapseAllBtn.addEventListener('click', () => {
+      document.querySelectorAll('.eds-asset-item').forEach(item => {
+        item.classList.remove('is-expanded');
+      });
+    });
+    
+    controls.appendChild(expandAllBtn);
+    controls.appendChild(collapseAllBtn);
+    root.appendChild(controls);
+    
     const list = document.createElement('ul');
     list.className = 'eds-file-list';
-    detail.assets.forEach((asset) => {
+    allAssets.forEach((asset) => {
       const li = document.createElement('li');
-      li.className = 'eds-file-card';
+      li.className = 'eds-asset-item';
+      
+      const header = document.createElement('div');
+      header.className = 'eds-asset-header';
+      header.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;';
+      
+      const toggle = document.createElement('span');
+      toggle.className = 'eds-asset-toggle';
+      toggle.textContent = '▶';
+      toggle.style.cssText = 'font-size: 10px; color: var(--muted); transition: transform 0.2s; cursor: pointer;';
+      
+      const titleWrapper = document.createElement('div');
+      titleWrapper.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1;';
+      
       const title = document.createElement('div');
       title.className = 'eds-file-card__path';
       title.textContent = asset.path;
+      title.style.flex = '1';
+      title.style.cursor = 'pointer';
+      
+      // Markupの場合のみ、前/次のブロック切り替えボタンを追加（常に表示、複数ある場合のみ有効化）
+      if (asset.isMarkup) {
+        const navWrapper = document.createElement('div');
+        navWrapper.className = 'eds-markup-nav';
+        navWrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+        
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'eds-nav-button';
+        prevBtn.innerHTML = '◀';
+        prevBtn.title = 'Previous block';
+        prevBtn.disabled = !hasMultipleBlocks || currentBlockIndex === 0;
+        prevBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;';
+        prevBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (currentBlockIndex > 0) {
+            const prevBlock = blocksWithSameName[currentBlockIndex - 1];
+            await sendToContentWithTabId('select-block', { id: prevBlock.id });
+            await sendToContentWithTabId('scroll-to-block', { id: prevBlock.id });
+            await sendToContentWithTabId('highlight', { id: prevBlock.id });
+            const prevDetail = await sendToContentWithTabId('get-block-detail', { id: prevBlock.id });
+            renderBlockDetail(state, prevDetail, refresh);
+          }
+        });
+        
+        const navInfo = document.createElement('span');
+        navInfo.className = 'eds-nav-info';
+        navInfo.textContent = `${currentBlockIndex + 1} / ${blocksWithSameName.length}`;
+        navInfo.style.cssText = 'font-size: 11px; color: var(--muted); padding: 0 4px;';
+        
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'eds-nav-button';
+        nextBtn.innerHTML = '▶';
+        nextBtn.title = 'Next block';
+        nextBtn.disabled = !hasMultipleBlocks || currentBlockIndex === blocksWithSameName.length - 1;
+        nextBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;';
+        nextBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (currentBlockIndex < blocksWithSameName.length - 1) {
+            const nextBlock = blocksWithSameName[currentBlockIndex + 1];
+            await sendToContentWithTabId('select-block', { id: nextBlock.id });
+            await sendToContentWithTabId('scroll-to-block', { id: nextBlock.id });
+            await sendToContentWithTabId('highlight', { id: nextBlock.id });
+            const nextDetail = await sendToContentWithTabId('get-block-detail', { id: nextBlock.id });
+            renderBlockDetail(state, nextDetail, refresh);
+          }
+        });
+        
+        navWrapper.appendChild(prevBtn);
+        navWrapper.appendChild(navInfo);
+        navWrapper.appendChild(nextBtn);
+        titleWrapper.appendChild(title);
+        titleWrapper.appendChild(navWrapper);
+      } else {
+        titleWrapper.appendChild(title);
+      }
+      
       const pill = document.createElement('span');
       pill.className = 'eds-pill';
       pill.textContent = asset.type;
-      const header = document.createElement('div');
-      header.className = 'eds-flex';
-      header.append(title, pill);
+      
+      // コピーボタンを追加
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'eds-copy-button';
+      copyBtn.innerHTML = '📋';
+      copyBtn.title = 'Copy to clipboard';
+      copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const rawContent = asset.content || '(empty file)';
+        try {
+          await navigator.clipboard.writeText(rawContent);
+          copyBtn.innerHTML = '✓';
+          copyBtn.style.color = '#86efac';
+          setTimeout(() => {
+            copyBtn.innerHTML = '📋';
+            copyBtn.style.color = 'var(--muted)';
+          }, 2000);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          copyBtn.innerHTML = '✗';
+          copyBtn.style.color = '#f87171';
+          setTimeout(() => {
+            copyBtn.innerHTML = '📋';
+            copyBtn.style.color = 'var(--muted)';
+          }, 2000);
+        }
+      });
+      
+      const content = document.createElement('div');
+      content.className = 'eds-asset-content';
+      content.style.cssText = 'display: none; margin-top: 8px;';
+      
       const code = document.createElement('pre');
       code.className = 'eds-code';
-      code.textContent = asset.content || '(empty file)';
-      li.append(header, code);
+      
+      // ファイルタイプに応じてシンタックスハイライトとインデント処理
+      const processedCode = processCode(asset.content || '(empty file)', asset.type, asset.path);
+      code.innerHTML = processedCode;
+      
+      content.appendChild(code);
+      
+      // ヘッダーのクリックで開閉（toggleとtitleをクリック可能に）
+      const handleToggle = () => {
+        li.classList.toggle('is-expanded');
+        const isExpanded = li.classList.contains('is-expanded');
+        content.style.display = isExpanded ? 'block' : 'none';
+        toggle.textContent = isExpanded ? '▼' : '▶';
+      };
+      
+      toggle.addEventListener('click', handleToggle);
+      title.addEventListener('click', handleToggle);
+      
+      // 保存された開閉状態を復元
+      const wasExpanded = expandedPaths.has(asset.path);
+      if (wasExpanded) {
+        li.classList.add('is-expanded');
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+      }
+      
+      header.appendChild(toggle);
+      header.appendChild(titleWrapper);
+      header.appendChild(pill);
+      header.appendChild(copyBtn);
+      
+      li.appendChild(header);
+      li.appendChild(content);
       list.appendChild(li);
     });
     root.appendChild(list);
@@ -412,6 +573,157 @@ function renderBlockDetail(state, detail, refresh) {
     root.appendChild(empty);
   }
 }
+
+function processCode(content, type, path) {
+  if (!content || content === '(empty file)') {
+    return escapeHtml(content);
+  }
+  
+  // ファイルタイプを判定
+  const ext = path.split('.').pop().toLowerCase();
+  let lang = type.toLowerCase();
+  
+  if (ext === 'html' || ext === 'htm') lang = 'html';
+  else if (ext === 'css') lang = 'css';
+  else if (ext === 'js' || ext === 'mjs') lang = 'javascript';
+  else if (ext === 'json') lang = 'json';
+  else if (ext === 'xml') lang = 'xml';
+  
+  // HTMLの場合はインデント処理
+  if (lang === 'html') {
+    content = indentHtml(content);
+  }
+  
+  // シンタックスハイライト
+  return highlightCode(content, lang);
+}
+
+function indentHtml(html) {
+  if (!html || typeof html !== 'string') return html;
+  
+  // 既に整形されている場合は正規化のみ
+  if (html.includes('\n')) {
+    const lines = html.split('\n');
+    const indentSize = 2;
+    let indent = 0;
+    const normalized = [];
+    
+    for (let line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        normalized.push('');
+        continue;
+      }
+      
+      // 閉じタグの場合はインデントを減らす
+      if (trimmed.match(/^<\/\w+/)) {
+        indent = Math.max(0, indent - indentSize);
+      }
+      
+      normalized.push(' '.repeat(indent) + trimmed);
+      
+      // 開きタグで、自己完結型でない場合はインデントを増やす
+      const openTagMatch = trimmed.match(/^<(\w+)([^>]*)>/);
+      if (openTagMatch && !trimmed.match(/\/>$/)) {
+        const tagName = openTagMatch[1];
+        if (!isSelfClosingTag(tagName)) {
+          indent += indentSize;
+        }
+      }
+    }
+    
+    return normalized.join('\n');
+  }
+  
+  // 1行のHTMLの場合は整形を試みる
+  try {
+    const parser = new DOMParser();
+    // HTML全体をラップせずに直接パース
+    const doc = parser.parseFromString(html, 'text/html');
+    const errorNode = doc.querySelector('parsererror');
+    if (errorNode) {
+      // パースエラーの場合は元のHTMLを返す
+      return html;
+    }
+    
+    // bodyの内容を取得
+    const body = doc.body;
+    if (body && body.childNodes.length > 0) {
+      let formatted = '';
+      Array.from(body.childNodes).forEach(node => {
+        const nodeFormatted = formatElement(node, 0, 2);
+        if (nodeFormatted) {
+          formatted += nodeFormatted + '\n';
+        }
+      });
+      return formatted.trim() || html;
+    }
+    
+    return html;
+  } catch (e) {
+    console.warn('[EDS Inspector] HTML formatting error:', e);
+    return html;
+  }
+}
+
+function formatElement(element, indent, indentSize) {
+  if (!element) return '';
+  
+  if (element.nodeType === Node.TEXT_NODE) {
+    const text = element.textContent;
+    // 空白のみのテキストノードは無視
+    if (!text.trim()) return '';
+    return text;
+  }
+  
+  if (element.nodeType === Node.ELEMENT_NODE) {
+    const tagName = element.tagName.toLowerCase();
+    const indentStr = ' '.repeat(indent);
+    const children = Array.from(element.childNodes);
+    const hasElementChildren = children.some(child => child.nodeType === Node.ELEMENT_NODE);
+    
+    // 子要素がない場合
+    if (children.length === 0) {
+      return `${indentStr}<${tagName}${formatAttributes(element)} />`;
+    }
+    
+    // テキストのみの子要素がある場合
+    if (!hasElementChildren) {
+      const text = children.map(child => child.textContent).join('').trim();
+      if (text) {
+        return `${indentStr}<${tagName}${formatAttributes(element)}>${text}</${tagName}>`;
+      } else {
+        return `${indentStr}<${tagName}${formatAttributes(element)} />`;
+      }
+    }
+    
+    // 要素の子要素がある場合
+    let result = `${indentStr}<${tagName}${formatAttributes(element)}>\n`;
+    children.forEach(child => {
+      const formatted = formatElement(child, indent + indentSize, indentSize);
+      if (formatted) {
+        result += formatted + '\n';
+      }
+    });
+    result += `${indentStr}</${tagName}>`;
+    return result;
+  }
+  
+  return '';
+}
+
+function formatAttributes(element) {
+  if (!element.attributes || element.attributes.length === 0) return '';
+  const attrs = Array.from(element.attributes).map(attr => ` ${attr.name}="${attr.value}"`).join('');
+  return attrs;
+}
+
+function isSelfClosingTag(tagName) {
+  const selfClosing = ['img', 'br', 'hr', 'input', 'meta', 'link', 'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'];
+  return selfClosing.includes(tagName.toLowerCase());
+}
+
+// highlightCodeとescapeHtmlはutils.jsに移動済み
 
 let autoUpdateInterval = null;
 let isUpdating = false;
@@ -425,14 +737,14 @@ async function hydratePanels() {
   try {
     isUpdating = true;
     console.log('[EDS Inspector Panel] Fetching state from content script...');
-    const state = await sendToContent('state');
+    const state = await sendToContentWithTabId('state');
     console.log('[EDS Inspector Panel] State received:', state);
     if (!state) {
       throw new Error('No state received from content script');
     }
     renderControl(state, hydratePanels);
     if (state.selectedBlock) {
-      const detail = await sendToContent('get-block-detail', { id: state.selectedBlock });
+      const detail = await sendToContentWithTabId('get-block-detail', { id: state.selectedBlock });
       renderBlockDetail(state, detail, hydratePanels);
     } else {
       renderBlocks(state, hydratePanels);
@@ -440,6 +752,7 @@ async function hydratePanels() {
     renderIcons(state);
     renderCode(state);
     renderMedia(state);
+    // renderDocs()はタブ切り替え時のみ呼ぶ（自動更新では呼ばない）
   } catch (err) {
     console.error('[EDS Inspector Panel] Error hydrating panels:', err);
     // エラーメッセージを表示
@@ -505,7 +818,7 @@ async function initializePanel() {
     console.log('[EDS Inspector Panel] Ensuring content script is injected...');
     
     try {
-      await ensureContentInjected();
+      await ensureContentInjectedWithTabId();
       console.log('[EDS Inspector Panel] Content script injection ensured');
     } catch (injectErr) {
       console.error('[EDS Inspector Panel] Failed to inject content script:', injectErr);
@@ -548,14 +861,14 @@ async function initializePanel() {
     
     try {
       console.log('[EDS Inspector Panel] Sending init message to content script...');
-      await sendToContent('init');
+      await sendToContentWithTabId('init');
       console.log('[EDS Inspector Panel] Init message sent successfully');
     } catch (e) {
       console.warn('[EDS Inspector Panel] Init message failed, retrying...', e);
       // if content not ready yet, retry once
       await new Promise((resolve) => setTimeout(resolve, 300));
       try {
-        await sendToContent('init');
+        await sendToContentWithTabId('init');
         console.log('[EDS Inspector Panel] Init message sent successfully after retry');
       } catch (retryErr) {
         console.error('[EDS Inspector Panel] Init message failed after retry:', retryErr);

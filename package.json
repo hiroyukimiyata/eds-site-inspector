@@ -7,11 +7,20 @@
     "build": "node scripts/build.js",
     "watch": "nodemon --watch src --watch scripts/build.js --exec \"npm run build\""
   },
-  "keywords": ["aem", "eds", "edge-delivery-services", "chrome-extension", "inspector"],
+  "keywords": [
+    "aem",
+    "eds",
+    "edge-delivery-services",
+    "chrome-extension",
+    "inspector"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "esbuild": "^0.24.0",
     "nodemon": "^3.1.9"
+  },
+  "dependencies": {
+    "marked": "^17.0.1"
   }
 }

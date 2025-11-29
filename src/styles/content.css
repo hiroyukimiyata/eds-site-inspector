@@ -45,7 +45,9 @@
 }
 
 .eds-overlay.is-highlighted {
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.6) inset;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.8) inset, 0 0 20px rgba(249, 115, 22, 0.4);
+  z-index: 10000;
+  border-color: rgba(249, 115, 22, 1) !important;
 }
 
 .eds-overlay__label {

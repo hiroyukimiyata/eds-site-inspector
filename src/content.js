@@ -374,6 +374,24 @@
           // main要素の子孫要素であることを確認
           if (!mainLive.contains(liveElement)) return;
           
+          // ブロックのネストを防ぐ：親要素が別のブロック要素の場合はスキップ
+          // ただし、同じブロック名の場合は許可（同じブロックが複数ある場合）
+          let parent = liveElement.parentElement;
+          let isInsideBlock = false;
+          while (parent && parent !== mainLive) {
+            // 親要素が別のブロッククラスを持っているかチェック（同じブロック名は除く）
+            const parentClasses = Array.from(parent.classList || []);
+            if (parentClasses.some(cls => blockResources.has(cls) && cls !== blockName)) {
+              isInsideBlock = true;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          if (isInsideBlock) {
+            return; // ブロックのネストは検出しない
+          }
+          
           seenElements.add(liveElement);
           blocks.push({
             id: `block-${blocks.length}`,
@@ -434,14 +452,32 @@
           // main要素の子孫要素であることを確認
           if (!mainLive.contains(liveElement)) return;
           
+          // ブロックのネストを防ぐ：親要素が別のブロック要素の場合はスキップ
+          // ただし、同じブロック名の場合は許可（同じブロックが複数ある場合）
+          let parent = liveElement.parentElement;
+          let isInsideBlock = false;
+          while (parent && parent !== mainLive) {
+            // 親要素が別のブロッククラスを持っているかチェック（同じブロック名は除く）
+            const parentClasses = Array.from(parent.classList || []);
+            if (parentClasses.some(cls => blockResources.has(cls) && cls !== blockName)) {
+              isInsideBlock = true;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          if (isInsideBlock) {
+            return; // ブロックのネストは検出しない
+          }
+          
           seenElements.add(liveElement);
-          blocks.push({
+      blocks.push({
             id: `block-${blocks.length}`,
-            element: liveElement,
+        element: liveElement,
             name: blockName,
             tagName: liveElement.tagName.toLowerCase(),
-            classes: liveElement.className || '',
-          });
+        classes: liveElement.className || '',
+      });
           console.log('[EDS Inspector] Detected block (from SSR, no network resource):', blockName);
         });
       } catch (e) {
@@ -454,7 +490,8 @@
     // SSRマークアップから直接セマンティックな要素を検出する
     console.log('[EDS Inspector] Detecting default content blocks...');
     
-    // 既に検出されたブロック要素を収集（ブロック内のDefault Contentは検出しないため）
+    // 既に検出されたブロック要素を収集（ブロック内のブロックは検出しないため）
+    // ただし、ブロック内のDefault Contentは検出する
     const detectedBlockElements = new Set();
     blocks.forEach((block) => {
       detectedBlockElements.add(block.element);
@@ -473,6 +510,14 @@
         // 無視
       }
     });
+    
+    // ブロッククラスを持つ要素かどうかを判定する関数
+    function isBlockElement(element) {
+      if (!element || !(element instanceof HTMLElement)) return false;
+      if (detectedBlockElements.has(element)) return true;
+      const classes = Array.from(element.classList || []);
+      return classes.some(cls => blockResources.has(cls));
+    }
     
     DEFAULT_CONTENT_MAP.forEach((contentDef) => {
       // SSRマークアップから該当する要素を検出
@@ -521,27 +566,25 @@
           // タグ名が一致することを確認
           if (pathBasedElement.tagName.toLowerCase() !== contentDef.selector.toLowerCase()) return;
           
-          // 既に検出済みの要素はスキップ
-          if (seenElements.has(pathBasedElement)) return;
+        // 既に検出済みの要素はスキップ
+        if (seenElements.has(pathBasedElement)) return;
           
-          // ブロック内の要素は検出しない
+          // ブロック内のブロックは検出しない（ただし、ブロック内のDefault Contentは検出する）
           let liveParent = pathBasedElement.parentElement;
           let isInsideBlock = false;
           while (liveParent && liveParent !== mainLive) {
-            if (detectedBlockElements.has(liveParent)) {
-              isInsideBlock = true;
-              break;
-            }
-            // ブロッククラスを持つ要素もチェック
-            const parentClasses = Array.from(liveParent.classList || []);
-            if (parentClasses.some(cls => blockResources.has(cls))) {
-              isInsideBlock = true;
+            // 親要素がブロック要素の場合、ブロック内のブロックとして検出しない
+            // ただし、Default Contentは検出する
+            if (isBlockElement(liveParent)) {
+              // 親がブロック要素の場合、この要素がブロック要素でない限り検出する
+              // （ブロック内のDefault Contentは検出する）
               break;
             }
             liveParent = liveParent.parentElement;
           }
           
-          if (isInsideBlock) {
+          // この要素自体がブロック要素の場合はスキップ（ブロック内のブロックは検出しない）
+          if (isBlockElement(pathBasedElement)) {
             return;
           }
           
@@ -580,24 +623,9 @@
         // main要素の子孫要素であることを確認
         if (!mainLive.contains(liveElement)) return;
         
-        // ブロック内の要素は検出しない
-        let liveParent = liveElement.parentElement;
-        let isInsideBlock = false;
-        while (liveParent && liveParent !== mainLive) {
-          if (detectedBlockElements.has(liveParent)) {
-            isInsideBlock = true;
-            break;
-          }
-          // ブロッククラスを持つ要素もチェック
-          const parentClasses = Array.from(liveParent.classList || []);
-          if (parentClasses.some(cls => blockResources.has(cls))) {
-            isInsideBlock = true;
-            break;
-          }
-          liveParent = liveParent.parentElement;
-        }
-        
-        if (isInsideBlock) {
+        // ブロック内のブロックは検出しない（ただし、ブロック内のDefault Contentは検出する）
+        // この要素自体がブロック要素の場合はスキップ（ブロック内のブロックは検出しない）
+        if (isBlockElement(liveElement)) {
           return;
         }
         
@@ -945,43 +973,44 @@
 
   function serializeState() {
     // ブロックをユニークにする（同じ要素を複数回検出しないようにする）
-    const uniqueBlocks = new Map();
     const seenElements = new Set();
+    const allBlocks = [];
     
     state.blocks.forEach((block) => {
-      // 要素ベースでユニーク化
+      // 要素ベースでユニーク化（同じ要素は1回だけ）
       if (seenElements.has(block.element)) return;
       seenElements.add(block.element);
       
-      // nameだけでユニーク化（同じnameのブロックは1つだけ表示）
+      // すべてのブロックを追加（同じ名前のブロックも複数含める）
+      allBlocks.push(block);
+    });
+    
+    // 同じ名前のブロックをグループ化して、1つのエントリとして返す（ブロック数も含める）
+    const blocksByName = new Map();
+    allBlocks.forEach((block) => {
       const key = block.name;
-      if (!uniqueBlocks.has(key)) {
-        uniqueBlocks.set(key, block);
-      } else {
-        // 既存のブロックと比較して、より適切なものを選択
-        const existing = uniqueBlocks.get(key);
-        // tagNameがより具体的なものを優先（例: picture > img）
-        const existingTag = existing.tagName.toLowerCase();
-        const currentTag = block.tagName.toLowerCase();
-        // picture > img, pre > code などの優先順位
-        const tagPriority = { picture: 3, pre: 3, h1: 6, h2: 5, h3: 4, h4: 3, h5: 2, h6: 1, ol: 2, ul: 2 };
-        const existingPriority = tagPriority[existingTag] || 0;
-        const currentPriority = tagPriority[currentTag] || 0;
-        if (currentPriority > existingPriority) {
-          uniqueBlocks.set(key, block);
-        }
+      if (!blocksByName.has(key)) {
+        blocksByName.set(key, {
+          blocks: [],
+          representative: block // 代表的なブロック（最初に見つかったもの）
+        });
       }
+      blocksByName.get(key).blocks.push(block);
     });
     
     return {
       sections: state.sections.map((section) => ({ id: section.id, label: section.label })),
-      blocks: Array.from(uniqueBlocks.values()).map((block) => ({ 
-        id: block.id, 
-        name: block.name, 
-        tagName: block.tagName, 
-        classes: block.classes,
-        category: block.category || 'block'
-      })),
+      blocks: Array.from(blocksByName.entries()).map(([name, group]) => {
+        const rep = group.representative;
+        return {
+          id: rep.id, // 代表的なブロックのIDを使用
+          name: rep.name,
+          tagName: rep.tagName,
+          classes: rep.classes,
+          category: rep.category || 'block',
+          count: group.blocks.length // 同じ名前のブロック数
+        };
+      }),
       icons: state.icons.map((icon) => ({
         id: icon.id,
         name: icon.name,
@@ -1630,6 +1659,19 @@
             sendResponse({ ok: true });
             break;
           }
+          case 'scroll-to-block': {
+            const block = state.blocks.find(b => b.id === message.payload.id);
+            if (block && block.element) {
+              block.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // スクロール後にオーバーレイの位置を更新
+              setTimeout(() => {
+                refreshOverlayPositions();
+                setHighlight(message.payload.id);
+              }, 300);
+            }
+            sendResponse({ ok: true });
+            break;
+          }
           case 'select-block': {
             state.selectedBlockId = message.payload.id;
             sendResponse({ ok: true });
@@ -1642,6 +1684,19 @@
           case 'get-block-detail': {
             const detail = await getBlockDetail(message.payload.id);
             sendResponse(detail);
+            break;
+          }
+          case 'get-blocks-by-name': {
+            // 同じ名前のブロックをすべて取得
+            const blockName = message.payload.name;
+            const blocksWithSameName = state.blocks.filter(b => b.name === blockName);
+            sendResponse(blocksWithSameName.map(block => ({
+              id: block.id,
+              name: block.name,
+              tagName: block.tagName,
+              classes: block.classes,
+              category: block.category || 'block'
+            })));
             break;
           }
           case 'show-devtools-prompt': {

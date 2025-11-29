@@ -38,6 +38,8 @@ async function build() {
     sourcemap: true,
     target: 'chrome118',
     format: 'iife',
+    platform: 'browser',
+    external: [],
   });
 
   await esbuild.build({
