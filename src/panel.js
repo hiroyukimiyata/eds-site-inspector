@@ -9,6 +9,7 @@ import { renderBlocks } from './panel/renderers/blocks.js';
 import { renderIcons } from './panel/renderers/icons.js';
 import { renderCode } from './panel/renderers/code.js';
 import { renderMedia } from './panel/renderers/media.js';
+import { renderJson } from './panel/renderers/json.js';
 import { renderBlockDetail } from './panel/renderers/block-detail.js';
 
 const tabId = chrome.devtools.inspectedWindow.tabId;
@@ -21,7 +22,7 @@ const ensureContentInjectedWithTabId = () => ensureContentInjected(tabId);
 /**
  * タブを切り替え
  */
-function switchTab(tab) {
+async function switchTab(tab) {
   document.querySelectorAll('.eds-tabs button').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
@@ -33,6 +34,18 @@ function switchTab(tab) {
   if (tab === 'docs') {
     renderDocs(tabId);
   }
+  
+  // JSONタブが選択されたときだけrenderJsonを呼ぶ
+  if (tab === 'json') {
+    try {
+      const state = await sendToContentWithTabId('state');
+      if (state) {
+        renderJson(state);
+      }
+    } catch (err) {
+      console.error('[EDS Inspector Panel] Error loading JSON tab:', err);
+    }
+  }
 }
 
 /**
@@ -40,11 +53,12 @@ function switchTab(tab) {
  */
 function bindTabs() {
   document.querySelectorAll('.eds-tabs button').forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    btn.addEventListener('click', async () => {
+      await switchTab(btn.dataset.tab);
+    });
   });
 }
 
-let autoUpdateInterval = null;
 let isUpdating = false;
 
 /**
@@ -74,7 +88,8 @@ async function hydratePanels() {
     renderIcons(state);
     renderCode(state);
     renderMedia(state);
-    // renderDocs()はタブ切り替え時のみ呼ぶ（自動更新では呼ばない）
+    renderJson(state);
+    // renderDocs()はタブ切り替え時のみ呼ぶ
   } catch (err) {
     console.error('[EDS Inspector Panel] Error hydrating panels:', err);
     // エラーメッセージを表示
@@ -100,35 +115,15 @@ async function hydratePanels() {
 }
 
 /**
- * 自動更新を開始
+ * ページをスクロールしてLazy Loadをトリガーしてから解析を開始
  */
-function startAutoUpdate() {
-  // 既存のインターバルをクリア
-  if (autoUpdateInterval) {
-    clearInterval(autoUpdateInterval);
-  }
-  
-  // 2秒ごとに状態を更新
-  autoUpdateInterval = setInterval(async () => {
-    try {
-      await hydratePanels();
-    } catch (err) {
-      console.error('[EDS Inspector Panel] Error in auto-update:', err);
-    }
-  }, 2000);
-  
-  console.log('[EDS Inspector Panel] Auto-update started');
-}
-
-/**
- * 自動更新を停止
- */
-function stopAutoUpdate() {
-  if (autoUpdateInterval) {
-    clearInterval(autoUpdateInterval);
-    autoUpdateInterval = null;
-    console.log('[EDS Inspector Panel] Auto-update stopped');
-  }
+async function scrollAndAnalyze() {
+  console.log('[EDS Inspector Panel] Scrolling page for lazy load...');
+  // ページを下までスクロールしてから上に戻す
+  await sendToContentWithTabId('scroll-page-for-lazy-load');
+  console.log('[EDS Inspector Panel] Page scroll complete, initializing...');
+  // スクロール完了後に初期化
+  await sendToContentWithTabId('init');
 }
 
 /**
@@ -145,7 +140,7 @@ async function initializePanel() {
     }
     
     bindTabs();
-    switchTab('control');
+    await switchTab('control');
     console.log('[EDS Inspector Panel] Ensuring content script is injected...');
     
     try {
@@ -191,16 +186,16 @@ async function initializePanel() {
     await new Promise((resolve) => setTimeout(resolve, 200));
     
     try {
-      console.log('[EDS Inspector Panel] Sending init message to content script...');
-      await sendToContentWithTabId('init');
-      console.log('[EDS Inspector Panel] Init message sent successfully');
+      console.log('[EDS Inspector Panel] Scrolling page and initializing...');
+      await scrollAndAnalyze();
+      console.log('[EDS Inspector Panel] Initialization complete');
     } catch (e) {
       console.warn('[EDS Inspector Panel] Init message failed, retrying...', e);
       // if content not ready yet, retry once
       await new Promise((resolve) => setTimeout(resolve, 300));
       try {
-        await sendToContentWithTabId('init');
-        console.log('[EDS Inspector Panel] Init message sent successfully after retry');
+        await scrollAndAnalyze();
+        console.log('[EDS Inspector Panel] Initialization complete after retry');
       } catch (retryErr) {
         console.error('[EDS Inspector Panel] Init message failed after retry:', retryErr);
         if (controlPanel) {
@@ -223,9 +218,6 @@ async function initializePanel() {
     console.log('[EDS Inspector Panel] Hydrating panels...');
     await hydratePanels();
     console.log('[EDS Inspector Panel] Panel initialization complete');
-    
-    // 自動更新を開始（2秒ごとに状態を取得してUIを更新）
-    startAutoUpdate();
   } catch (err) {
     console.error('[EDS Inspector Panel] Error initializing panel:', err);
     if (controlPanel && !controlPanel.querySelector('.eds-error')) {

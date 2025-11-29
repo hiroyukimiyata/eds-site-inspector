@@ -5,6 +5,7 @@
 import { attachGlobalListeners } from './content/overlay/manager.js';
 import { setupAutoUpdate } from './content/utils/auto-update.js';
 import { handleMessage } from './content/message-handler.js';
+import { setupJsonInterceptor } from './content/collectors/json.js';
 
 (() => {
   // 既に実行されている場合でも、メッセージリスナーが動作するようにする
@@ -21,6 +22,10 @@ import { handleMessage } from './content/message-handler.js';
     // メッセージリスナーは既に設定されているので、早期リターン
     return;
   }
+
+  // JSONインターセプターをセットアップ（できるだけ早く実行）
+  setupJsonInterceptor();
+  console.log('[EDS Inspector Content] JSON interceptor setup');
 
   // グローバルリスナーをアタッチ
   attachGlobalListeners();

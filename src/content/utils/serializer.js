@@ -66,6 +66,7 @@ export function serializeState() {
       isImage: file.isImage,
       url: file.url,
     })) : null,
+    jsonFiles: state.jsonFiles ? Array.from(state.jsonFiles.values()) : null,
   };
 }
 

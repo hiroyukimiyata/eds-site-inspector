@@ -257,6 +257,23 @@ export async function handleMessage(message, sender, sendResponse) {
         sendResponse({ ok: true });
         break;
       }
+      case 'scroll-page-for-lazy-load': {
+        // ページを下までスクロールしてから上に戻す（Lazy Load対策）
+        const scrollHeight = document.documentElement.scrollHeight;
+        const clientHeight = document.documentElement.clientHeight;
+        const maxScroll = scrollHeight - clientHeight;
+        
+        // 下までスクロール
+        window.scrollTo({ top: maxScroll, behavior: 'smooth' });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 上に戻る
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        sendResponse({ ok: true });
+        break;
+      }
       default:
         console.warn('[EDS Inspector Content] Unknown message type:', message.type);
         sendResponse({ ok: false, reason: 'unknown-message' });

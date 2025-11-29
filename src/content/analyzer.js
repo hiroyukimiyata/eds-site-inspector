@@ -4,6 +4,7 @@
 import { state } from './state.js';
 import { resolveConfig, parseSSRDocument } from './utils/config.js';
 import { collectBlockResourceNames, collectIconNames } from './collectors/resources.js';
+import { collectJsonFiles } from './collectors/json.js';
 import { detectSections } from './detectors/sections.js';
 import { detectBlocks } from './detectors/blocks.js';
 import { detectIcons } from './detectors/icons.js';
@@ -28,6 +29,9 @@ export async function analyzePage() {
   state.sections = detectSections(mainSSR, mainLive);
   state.blocks = detectBlocks(mainSSR, mainLive, blockResources);
   state.icons = await detectIcons(mainSSR, mainLive, iconResources);
+  
+  // JSONファイルを収集
+  state.jsonFiles = collectJsonFiles();
   
   // Media Busファイルも検出
   await loadCodeAndMedia();

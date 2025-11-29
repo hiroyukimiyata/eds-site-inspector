@@ -14,5 +14,6 @@ export const state = {
   mediaFiles: null,
   ssrDocument: null,
   icons: [], // アイコンの一覧
+  jsonFiles: null, // JSONファイルの一覧
 };
 

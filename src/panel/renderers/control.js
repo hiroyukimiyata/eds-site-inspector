@@ -90,5 +90,27 @@ export function renderControl(state, refresh, tabId) {
   overlayControls.appendChild(defaultItem);
 
   root.appendChild(overlayControls);
+
+  // Reloadボタンを追加
+  const reloadButton = document.createElement('button');
+  reloadButton.className = 'eds-button eds-button--primary';
+  reloadButton.textContent = 'Reload';
+  reloadButton.style.cssText = 'width: 100%; margin-top: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--accent); color: #0b1220; cursor: pointer; font-weight: 600; font-size: 12px;';
+  reloadButton.addEventListener('click', async () => {
+    reloadButton.disabled = true;
+    reloadButton.textContent = 'Reloading...';
+    try {
+      // ページをスクロールしてから再解析
+      await sendToContent(tabId, 'scroll-page-for-lazy-load');
+      await sendToContent(tabId, 'reanalyze');
+      await refresh();
+    } catch (err) {
+      console.error('[EDS Inspector Panel] Error reloading:', err);
+    } finally {
+      reloadButton.disabled = false;
+      reloadButton.textContent = 'Reload';
+    }
+  });
+  root.appendChild(reloadButton);
 }
 

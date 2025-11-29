@@ -13,6 +13,10 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
     return;
   }
   
+  // スクロール位置を保存
+  const scrollContainer = root.closest('main') || root.parentElement;
+  const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+  
   // 現在の開閉状態を保存
   const expandedPaths = new Set();
   const existingItems = root.querySelectorAll('.eds-asset-item.is-expanded');
@@ -111,6 +115,16 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
     empty.className = 'eds-empty';
     empty.textContent = 'No block assets found in network responses.';
     root.appendChild(empty);
+  }
+  
+  // スクロール位置を復元（DOM更新を待つ）
+  if (scrollContainer && savedScrollTop > 0) {
+    // requestAnimationFrameを2回呼んで、DOMの更新を確実に待つ
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollContainer.scrollTop = savedScrollTop;
+      });
+    });
   }
 }
 
