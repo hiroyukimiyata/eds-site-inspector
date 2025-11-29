@@ -31,7 +31,9 @@ export async function analyzePage() {
   state.icons = await detectIcons(mainSSR, mainLive, iconResources);
   
   // JSONファイルを収集
+  console.log('[EDS Inspector Content] About to collect JSON files...');
   state.jsonFiles = collectJsonFiles();
+  console.log('[EDS Inspector Content] JSON files collected:', state.jsonFiles ? state.jsonFiles.size : 0);
   
   // Media Busファイルも検出
   await loadCodeAndMedia();

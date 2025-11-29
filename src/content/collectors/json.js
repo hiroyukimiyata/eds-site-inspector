@@ -2,22 +2,35 @@
  * JSONファイルの収集
  */
 
-// グローバルストレージにJSONファイルを保存（fetch/XHRインターセプト用）
-if (!window.__edsJsonFiles) {
-  window.__edsJsonFiles = new Map();
-}
-
 /**
  * JSONファイルを収集
  */
 export function collectJsonFiles() {
-  const jsonFiles = new Map(); // url -> { url, pathname, filename }
+  const jsonFiles = new Map();
   const mainOrigin = window.location.origin;
   
-  const addFromUrl = (urlString, contentType = null) => {
+  console.log('[EDS Inspector JSON] Starting collection, origin:', mainOrigin);
+  
+  // Performance APIからネットワークリクエストを収集
+  const resources = performance.getEntriesByType('resource');
+  console.log('[EDS Inspector JSON] Total resources:', resources.length);
+  
+  // .jsonを含むすべてのリソースをまず抽出
+  const jsonCandidates = resources.filter(r => r.name && r.name.includes('.json'));
+  console.log('[EDS Inspector JSON] Resources containing .json:', jsonCandidates.length);
+  jsonCandidates.forEach(r => {
+    console.log('[EDS Inspector JSON] Candidate:', r.name);
+  });
+  
+  // すべてのリソースをチェック
+  resources.forEach((entry) => {
+    const urlString = entry.name;
+    if (!urlString || typeof urlString !== 'string') return;
+    
+    // .jsonを含むかチェック
+    if (!urlString.includes('.json')) return;
+    
     try {
-      if (!urlString || typeof urlString !== 'string') return;
-      
       // URLを解析
       let url;
       try {
@@ -27,133 +40,77 @@ export function collectJsonFiles() {
         url = new URL(urlString, window.location.href);
       }
       
+      console.log('[EDS Inspector JSON] Processing:', urlString, '-> origin:', url.origin, 'pathname:', url.pathname);
+      console.log('[EDS Inspector JSON] Main origin:', mainOrigin);
+      
       // メインドメインと同じドメインのもののみを対象
-      if (url.origin !== mainOrigin) {
+      // ただし、サブドメインの違いは許容（例: main--fm-eds-demo-- と main--fm-eds-demo-doc--）
+      const mainDomain = mainOrigin.replace(/^https?:\/\//, '').split('/')[0];
+      const resourceDomain = url.origin.replace(/^https?:\/\//, '').split('/')[0];
+      
+      // 完全に同じドメイン、または同じベースドメイン（最後の2つのセグメントが同じ）
+      const mainParts = mainDomain.split('.');
+      const resourceParts = resourceDomain.split('.');
+      const isSameDomain = url.origin === mainOrigin || 
+                          (mainParts.length >= 2 && resourceParts.length >= 2 &&
+                           mainParts.slice(-2).join('.') === resourceParts.slice(-2).join('.'));
+      
+      if (!isSameDomain) {
+        console.log('[EDS Inspector JSON] Skipping different domain:', url.origin, 'vs', mainOrigin);
         return;
       }
       
-      const { pathname } = url;
+      // パス名を取得（クエリパラメータは含まれない）
+      const pathname = url.pathname;
       
-      // .jsonで終わるURL、またはContent-Typeがapplication/jsonのものを検出
-      const isJsonFile = pathname.endsWith('.json') || 
-                        pathname.match(/\.json(\?|$)/) ||
-                        contentType?.includes('application/json');
+      // .jsonで終わるURLを検出
+      // pathnameは既にクエリパラメータを含まないので、.jsonで終わっていればOK
+      // 例: /file.json -> pathname = "/file.json"
+      //     /file.json?v=1 -> pathname = "/file.json"
+      const isJsonFile = pathname.endsWith('.json');
       
       if (isJsonFile) {
         // ファイル名を抽出
         const pathParts = pathname.split('/').filter(p => p);
-        const filename = pathParts[pathParts.length - 1]?.split('?')[0] || pathname;
+        const filename = pathParts[pathParts.length - 1] || pathname;
         
-        jsonFiles.set(urlString, {
-          url: urlString,
+        // 正規化されたURLを保存
+        const normalizedUrl = url.toString();
+        
+        jsonFiles.set(normalizedUrl, {
+          url: normalizedUrl,
           pathname: pathname,
           filename: filename
         });
-        console.log('[EDS Inspector] Found JSON file:', filename, 'from URL:', urlString, 'Content-Type:', contentType);
+        console.log('[EDS Inspector JSON] ✓ ADDED JSON:', filename, '->', normalizedUrl);
+      } else {
+        console.log('[EDS Inspector JSON] Pathname does not end with .json:', pathname);
       }
     } catch (e) {
-      // URL解析エラーは無視
-    }
-  };
-
-  // グローバルストレージから既に検出されたJSONファイルを追加
-  window.__edsJsonFiles.forEach((contentType, urlString) => {
-    addFromUrl(urlString, contentType);
-  });
-
-  // Performance APIからネットワークリクエストを収集
-  const resources = performance.getEntriesByType('resource');
-  console.log('[EDS Inspector] Checking', resources.length, 'network resources for JSON files...');
-  
-  resources.forEach((entry) => {
-    if (entry.name) {
-      // グローバルストレージにContent-Typeが保存されている場合は使用
-      const contentType = window.__edsJsonFiles.get(entry.name);
-      addFromUrl(entry.name, contentType);
+      console.error('[EDS Inspector JSON] Error processing URL:', urlString, e);
     }
   });
-  
-  // PerformanceObserverで追加のリクエストを監視
-  try {
-    const observer = new PerformanceObserver((list) => {
-      list.getEntries().forEach((entry) => {
-        if (entry.name) {
-          const contentType = window.__edsJsonFiles.get(entry.name);
-          addFromUrl(entry.name, contentType);
-        }
-      });
-    });
-    observer.observe({ entryTypes: ['resource'] });
-  } catch (e) {
-    // PerformanceObserverがサポートされていない場合は無視
-  }
   
   const collectedFiles = Array.from(jsonFiles.values());
-  console.log('[EDS Inspector] Collected JSON files:', collectedFiles.length, 'files:', collectedFiles.map(f => f.filename));
+  console.log('[EDS Inspector JSON] ✓ FINAL RESULT: Collected', collectedFiles.length, 'JSON files');
+  if (collectedFiles.length > 0) {
+    collectedFiles.forEach(f => {
+      console.log('[EDS Inspector JSON] File:', f.filename, f.url);
+    });
+  } else {
+    console.error('[EDS Inspector JSON] ❌ NO JSON FILES FOUND!');
+    console.error('[EDS Inspector JSON] All .json candidates:', jsonCandidates.map(r => r.name));
+  }
+  
   return jsonFiles;
 }
 
 /**
- * fetchとXMLHttpRequestをインターセプトしてJSONファイルを検出
+ * fetchとXMLHttpRequestをインターセプトしてJSONファイルを検出（将来の拡張用）
+ * 現在は拡張子のみで判定するため、この関数は不要だが、将来の拡張のために残す
  */
 export function setupJsonInterceptor() {
-  // 既にセットアップされている場合はスキップ
-  if (window.__edsJsonInterceptorSetup) {
-    return;
-  }
-  window.__edsJsonInterceptorSetup = true;
-
-  // fetchをインターセプト
-  const originalFetch = window.fetch;
-  window.fetch = async function(...args) {
-    const url = args[0];
-    const urlString = typeof url === 'string' ? url : url?.url || url?.toString();
-    
-    try {
-      const response = await originalFetch.apply(this, args);
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType && contentType.includes('application/json')) {
-        const fullUrl = urlString.startsWith('http') ? urlString : new URL(urlString, window.location.href).toString();
-        window.__edsJsonFiles.set(fullUrl, contentType);
-        console.log('[EDS Inspector] Intercepted JSON via fetch:', fullUrl);
-      }
-      
-      return response;
-    } catch (e) {
-      return originalFetch.apply(this, args);
-    }
-  };
-
-  // XMLHttpRequestをインターセプト
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-  
-  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    this._edsUrl = url;
-    return originalOpen.apply(this, [method, url, ...rest]);
-  };
-  
-  XMLHttpRequest.prototype.send = function(...args) {
-    const xhr = this;
-    const urlString = xhr._edsUrl;
-    
-    const originalOnReadyStateChange = xhr.onreadystatechange;
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4) {
-        const contentType = xhr.getResponseHeader('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const fullUrl = urlString.startsWith('http') ? urlString : new URL(urlString, window.location.href).toString();
-          window.__edsJsonFiles.set(fullUrl, contentType);
-          console.log('[EDS Inspector] Intercepted JSON via XHR:', fullUrl);
-        }
-      }
-      if (originalOnReadyStateChange) {
-        originalOnReadyStateChange.apply(this, arguments);
-      }
-    };
-    
-    return originalSend.apply(this, args);
-  };
+  // 現在は拡張子のみで判定するため、何もしない
+  // 将来、Content-Typeでの判定が必要になった場合に使用
 }
 

@@ -148,9 +148,13 @@ export async function handleMessage(message, sender, sendResponse) {
         break;
       }
       case 'reanalyze': {
+        console.log('[EDS Inspector Content] reanalyze called');
         await analyzePage();
+        console.log('[EDS Inspector Content] analyzePage completed, jsonFiles:', state.jsonFiles ? state.jsonFiles.size : 0);
         await loadCodeAndMedia();
-        sendResponse(serializeState());
+        const serialized = serializeState();
+        console.log('[EDS Inspector Content] serializeState completed, jsonFiles in serialized:', serialized.jsonFiles ? serialized.jsonFiles.length : 0);
+        sendResponse(serialized);
         break;
       }
       case 'enable-auto-update': {
@@ -265,10 +269,13 @@ export async function handleMessage(message, sender, sendResponse) {
         
         // 下までスクロール
         window.scrollTo({ top: maxScroll, behavior: 'smooth' });
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
         // 上に戻る
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // スクロール完了後、リソースが記録されるまで少し待つ
         await new Promise(resolve => setTimeout(resolve, 500));
         
         sendResponse({ ok: true });

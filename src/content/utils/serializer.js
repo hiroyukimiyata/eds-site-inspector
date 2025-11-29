@@ -7,6 +7,14 @@ import { state } from '../state.js';
  * 状態をシリアライズ
  */
 export function serializeState() {
+  // デバッグ: jsonFilesの状態を確認
+  console.log('[EDS Inspector Serializer] serializeState() called');
+  console.log('[EDS Inspector Serializer] state.jsonFiles:', state.jsonFiles);
+  if (state.jsonFiles) {
+    console.log('[EDS Inspector Serializer] state.jsonFiles.size:', state.jsonFiles.size);
+    const jsonArray = Array.from(state.jsonFiles.values());
+    console.log('[EDS Inspector Serializer] jsonFiles array:', jsonArray);
+  }
   // ブロックをユニークにする（同じ要素を複数回検出しないようにする）
   const seenElements = new Set();
   const allBlocks = [];
@@ -68,5 +76,16 @@ export function serializeState() {
     })) : null,
     jsonFiles: state.jsonFiles ? Array.from(state.jsonFiles.values()) : null,
   };
+}
+
+// デバッグ用: serializeStateを呼ぶ前にjsonFilesの状態を確認
+export function debugJsonFiles() {
+  console.log('[EDS Inspector Serializer] state.jsonFiles:', state.jsonFiles);
+  console.log('[EDS Inspector Serializer] state.jsonFiles type:', typeof state.jsonFiles);
+  console.log('[EDS Inspector Serializer] state.jsonFiles instanceof Map:', state.jsonFiles instanceof Map);
+  if (state.jsonFiles) {
+    console.log('[EDS Inspector Serializer] state.jsonFiles.size:', state.jsonFiles.size);
+    console.log('[EDS Inspector Serializer] Array.from(state.jsonFiles.values()):', Array.from(state.jsonFiles.values()));
+  }
 }
 
