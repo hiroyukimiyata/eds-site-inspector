@@ -2,6 +2,7 @@
  * Scriptsタブのレンダラー
  */
 import { highlightCode } from '../utils.js';
+import { createCopyButton, createSearchUI } from '../utils/file-utils.js';
 
 /**
  * Scriptsタブをレンダリング
@@ -83,11 +84,19 @@ export function renderScripts(state) {
     const toggle = document.createElement('span');
     toggle.className = 'eds-file-toggle';
     toggle.textContent = '▶';
-    toggle.style.cssText = 'font-size: 10px; color: var(--muted); margin-left: 12px; transition: transform 0.2s;';
+    toggle.style.cssText = 'font-size: 10px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0;';
     
-    header.appendChild(title);
-    header.appendChild(url);
-    header.appendChild(toggle);
+    const rightSection = document.createElement('div');
+    rightSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 12px;';
+    
+    const leftSection = document.createElement('div');
+    leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
+    leftSection.appendChild(toggle);
+    leftSection.appendChild(title);
+    leftSection.appendChild(url);
+    
+    header.appendChild(leftSection);
+    header.appendChild(rightSection);
 
     const content = document.createElement('div');
     content.className = 'eds-file-content';
@@ -97,10 +106,10 @@ export function renderScripts(state) {
     const wasLoaded = loadedUrls.has(scriptFile.url);
     
     if (wasExpanded) {
-      content.style.cssText = 'display: block; padding: 16px; background: var(--bg); max-height: 400px; overflow-y: auto;';
+      content.style.cssText = 'display: block; padding: 0; background: var(--bg); max-height: 400px; overflow-y: auto; position: relative;';
       toggle.textContent = '▼';
     } else {
-      content.style.cssText = 'display: none; padding: 16px; background: var(--bg); max-height: 400px; overflow-y: auto;';
+      content.style.cssText = 'display: none; padding: 0; background: var(--bg); max-height: 400px; overflow-y: auto; position: relative;';
       toggle.textContent = '▶';
     }
 
@@ -124,7 +133,22 @@ export function renderScripts(state) {
           
           pre.appendChild(code);
           content.innerHTML = '';
-          content.appendChild(pre);
+          
+          // コピーボタンと検索UIを追加（既に存在しない場合のみ）
+          if (!rightSection.querySelector('.eds-copy-button')) {
+            const copyBtn = createCopyButton(codeText, null, null);
+            copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
+            rightSection.appendChild(copyBtn);
+          }
+          
+          const searchUI = createSearchUI(content, codeText);
+          
+          const codeContainer = document.createElement('div');
+          codeContainer.style.cssText = 'padding: 16px;';
+          codeContainer.appendChild(pre);
+          
+          content.appendChild(searchUI);
+          content.appendChild(codeContainer);
         } catch (err) {
           console.error('[EDS Inspector Panel] Error loading script:', err);
           content.innerHTML = `<p class="eds-empty" style="color: #ef4444;">Error loading script: ${err.message}</p>`;
@@ -164,7 +188,22 @@ export function renderScripts(state) {
           code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
           
           pre.appendChild(code);
-          content.appendChild(pre);
+          
+          // コピーボタンと検索UIを追加（既に存在しない場合のみ）
+          if (!rightSection.querySelector('.eds-copy-button')) {
+            const copyBtn = createCopyButton(codeText, null, null);
+            copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
+            rightSection.appendChild(copyBtn);
+          }
+          
+          const searchUI = createSearchUI(content, codeText);
+          
+          const codeContainer = document.createElement('div');
+          codeContainer.style.cssText = 'padding: 16px;';
+          codeContainer.appendChild(pre);
+          
+          content.appendChild(searchUI);
+          content.appendChild(codeContainer);
         } catch (err) {
           console.error('[EDS Inspector Panel] Error loading script:', err);
           content.innerHTML = `<p class="eds-empty" style="color: #ef4444;">Error loading script: ${err.message}</p>`;

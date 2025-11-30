@@ -3,6 +3,7 @@
  */
 import { sendToContent } from '../utils.js';
 import { processCode } from '../utils/code-processor.js';
+import { createCopyButton as createCopyButtonUtil, createSearchUI } from '../utils/file-utils.js';
 
 /**
  * ブロック詳細をレンダリング
@@ -172,34 +173,54 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
   pill.textContent = asset.type;
   pill.style.cssText = 'flex-shrink: 0;';
   
-  // コピーボタンを追加
-  const copyBtn = createCopyButton(asset);
-  
-  rightSection.appendChild(pill);
-  rightSection.appendChild(copyBtn);
+  // コピーボタンを追加（既に存在しない場合のみ）
+  const rawContent = asset.content || '(empty file)';
+  let copyBtn = null;
+  if (!rightSection.querySelector('.eds-copy-button')) {
+    copyBtn = createCopyButtonUtil(rawContent, null, null);
+    copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s; flex-shrink: 0;';
+    rightSection.appendChild(pill);
+    rightSection.appendChild(copyBtn);
+  } else {
+    copyBtn = rightSection.querySelector('.eds-copy-button');
+    rightSection.appendChild(pill);
+  }
   
   const content = document.createElement('div');
   content.className = 'eds-asset-content';
   
   // ファイルタイプに応じてシンタックスハイライトとインデント処理
-  const processedCode = processCode(asset.content || '(empty file)', asset.type, asset.path);
+  const processedCode = processCode(rawContent, asset.type, asset.path);
   
-  const code = document.createElement('pre');
-  code.className = 'eds-code';
-  code.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
+  const pre = document.createElement('pre');
+  pre.className = 'eds-code';
+  pre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
+  
+  const code = document.createElement('code');
   code.innerHTML = processedCode;
+  code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
   
-  content.appendChild(code);
+  pre.appendChild(code);
   
   // 保存された開閉状態を復元
   const wasExpanded = expandedPaths.has(asset.path);
   if (wasExpanded) {
-    content.style.cssText = 'display: block; padding: 16px; background: var(--bg); max-height: 400px; overflow-y: auto;';
+    content.style.cssText = 'display: block; padding: 0; background: var(--bg); max-height: 400px; overflow-y: auto; position: relative;';
     toggle.textContent = '▼';
   } else {
-    content.style.cssText = 'display: none; padding: 16px; background: var(--bg); max-height: 400px; overflow-y: auto;';
+    content.style.cssText = 'display: none; padding: 0; background: var(--bg); max-height: 400px; overflow-y: auto; position: relative;';
     toggle.textContent = '▶';
   }
+  
+  // 検索UIを追加（content要素がスクロール可能なコンテナとして機能する）
+  const searchUI = createSearchUI(content, rawContent);
+  
+  const codeContainer = document.createElement('div');
+  codeContainer.style.cssText = 'padding: 16px;';
+  codeContainer.appendChild(pre);
+  
+  content.appendChild(searchUI);
+  content.appendChild(codeContainer);
   
   // ヘッダーのクリックで開閉
   const handleToggle = () => {
@@ -210,8 +231,14 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
   };
   
   header.addEventListener('click', (e) => {
-    // コピーボタンやナビゲーションボタンのクリックは無視
-    if (e.target === copyBtn || e.target.closest('.eds-nav-button') || e.target.closest('.eds-copy-button')) {
+    // コピーボタンやナビゲーションボタン、検索UIのクリックは無視
+    if (e.target === copyBtn || 
+        e.target.closest('.eds-nav-button') || 
+        e.target.closest('.eds-copy-button') ||
+        e.target.closest('.eds-search-container') ||
+        e.target.closest('.eds-search-input') ||
+        e.target.closest('.eds-search-nav') ||
+        e.target.closest('button')) {
       return;
     }
     handleToggle();
@@ -282,96 +309,4 @@ function createMarkupNavigation(blocksWithSameName, currentBlockIndex, hasMultip
   return navWrapper;
 }
 
-/**
- * コピーボタンを作成
- */
-function createCopyButton(asset) {
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'eds-copy-button';
-  copyBtn.innerHTML = '📋';
-  copyBtn.title = 'Copy to clipboard';
-  copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s; flex-shrink: 0;';
-  copyBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const rawContent = asset.content || '(empty file)';
-    
-    // DevToolsのコンテキストではClipboard APIがブロックされるため、フォールバック方法を使用
-    const copyToClipboard = (text) => {
-      // テキストエリアを作成してコピー
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      textarea.setSelectionRange(0, text.length);
-      
-      try {
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return successful;
-      } catch (err) {
-        document.body.removeChild(textarea);
-        throw err;
-      }
-    };
-    
-    try {
-      // まずClipboard APIを試す
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(rawContent).then(() => {
-          showCopySuccess(copyBtn);
-        }).catch(() => {
-          // Clipboard APIが失敗した場合はフォールバックを使用
-          if (copyToClipboard(rawContent)) {
-            showCopySuccess(copyBtn);
-          } else {
-            showCopyError(copyBtn);
-          }
-        });
-      } else {
-        // Clipboard APIが利用できない場合はフォールバックを使用
-        if (copyToClipboard(rawContent)) {
-          showCopySuccess(copyBtn);
-        } else {
-          showCopyError(copyBtn);
-        }
-      }
-    } catch (err) {
-      console.error('[EDS Inspector Panel] Failed to copy:', err);
-      showCopyError(copyBtn);
-    }
-  });
-  return copyBtn;
-}
-
-/**
- * コピー成功を表示
- */
-function showCopySuccess(button) {
-  const originalHTML = button.innerHTML;
-  const originalColor = button.style.color;
-  button.innerHTML = '✓';
-  button.style.color = '#86efac';
-  setTimeout(() => {
-    button.innerHTML = originalHTML;
-    button.style.color = originalColor;
-  }, 2000);
-}
-
-/**
- * コピーエラーを表示
- */
-function showCopyError(button) {
-  const originalHTML = button.innerHTML;
-  const originalColor = button.style.color;
-  button.innerHTML = '✗';
-  button.style.color = '#f87171';
-  setTimeout(() => {
-    button.innerHTML = originalHTML;
-    button.style.color = originalColor;
-  }, 2000);
-}
 

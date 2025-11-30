@@ -1,4 +1,5 @@
 import { getMarkdownUrl } from '../../utils/url.js';
+import { createSearchUI } from '../utils/file-utils.js';
 
 // Markdownのキャッシュ
 let markdownCache = {
@@ -12,10 +13,32 @@ let markdownCache = {
  */
 function renderDocsContent(container, markdown) {
   container.innerHTML = '';
+  
+  // コンテンツエリアを作成
+  const contentArea = document.createElement('div');
+  contentArea.className = 'eds-docs-content';
+  contentArea.style.cssText = 'padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;';
+  
+  // 検索UIを追加
+  const searchUI = createSearchUI(contentArea, markdown);
+  
+  // コードコンテナを作成
+  const codeContainer = document.createElement('div');
+  codeContainer.style.cssText = 'padding: 16px;';
+  
   const sourcePre = document.createElement('pre');
   sourcePre.className = 'eds-code';
-  sourcePre.textContent = markdown;
-  container.appendChild(sourcePre);
+  sourcePre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
+  
+  const sourceCode = document.createElement('code');
+  sourceCode.textContent = markdown;
+  sourceCode.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
+  
+  sourcePre.appendChild(sourceCode);
+  codeContainer.appendChild(sourcePre);
+  contentArea.appendChild(searchUI);
+  contentArea.appendChild(codeContainer);
+  container.appendChild(contentArea);
 }
 
 /**
