@@ -5,9 +5,35 @@ import { escapeHtml, highlightCode } from '../utils.js';
 import { js_beautify } from 'js-beautify';
 
 /**
- * HTMLを安全にインデント（DOMParserを使用して正確にインデント）
+ * js-beautifyの設定（フォールバック用）
  */
-function safeIndentHtml(html) {
+const JS_BEAUTIFY_CONFIG = {
+  indent_size: 2,
+  wrap_line_length: 200,
+  wrap_attributes: 'auto',
+  indent_inner_html: true
+};
+
+/**
+ * js-beautifyにフォールバック
+ * @param {string} html - フォーマットするHTML文字列
+ * @returns {string} フォーマットされたHTML文字列
+ */
+function fallbackToJsBeautify(html) {
+  try {
+    return js_beautify.html(html, JS_BEAUTIFY_CONFIG);
+  } catch (e) {
+    console.warn('[EDS Inspector] js-beautify fallback failed:', e);
+    return html;
+  }
+}
+
+/**
+ * HTMLを安全にインデント（DOMParserを使用して正確にインデント）
+ * @param {string} html - フォーマットするHTML文字列
+ * @returns {string} フォーマットされたHTML文字列
+ */
+export function safeIndentHtml(html) {
   if (!html || typeof html !== 'string') return html;
   
   try {
@@ -17,41 +43,36 @@ function safeIndentHtml(html) {
     const errorNode = doc.querySelector('parsererror');
     if (errorNode) {
       // パースエラーの場合はjs-beautifyにフォールバック
-      return js_beautify.html(html, {
-        indent_size: 2,
-        wrap_line_length: 200,
-        wrap_attributes: 'auto',
-        indent_inner_html: true
-      });
+      return fallbackToJsBeautify(html);
     }
     
     // bodyの最初の子要素を取得（outerHTMLは1つの要素を返すため）
     const body = doc.body;
     if (body && body.firstElementChild) {
-      return formatElementRecursive(body.firstElementChild, 0, 2);
+      const formatted = formatElementRecursive(body.firstElementChild, 0, 2);
+      // フォーマット結果が空でないことを確認
+      if (formatted && formatted.trim()) {
+        return formatted;
+      }
     }
     
-    return html;
+    // フォーマットできない場合はフォールバック
+    return fallbackToJsBeautify(html);
   } catch (e) {
     console.warn('[EDS Inspector] HTML formatting error:', e);
     // エラー時はjs-beautifyにフォールバック
-    try {
-      return js_beautify.html(html, {
-        indent_size: 2,
-        wrap_line_length: 200,
-        wrap_attributes: 'auto',
-        indent_inner_html: true
-      });
-    } catch (e2) {
-      return html;
-    }
+    return fallbackToJsBeautify(html);
   }
 }
 
 /**
  * 要素を再帰的にフォーマット（正確なインデントを保証）
+ * @param {HTMLElement} element - フォーマットする要素
+ * @param {number} indent - 現在のインデント数（スペース数）
+ * @param {number} indentSize - インデントサイズ（通常は2）
+ * @returns {string} フォーマットされたHTML文字列
  */
-function formatElementRecursive(element, indent, indentSize) {
+export function formatElementRecursive(element, indent, indentSize) {
   if (!element) return '';
   
   const indentStr = ' '.repeat(indent);
@@ -84,7 +105,9 @@ function formatElementRecursive(element, indent, indentSize) {
   // 要素の子要素がある場合
   let result = `${indentStr}<${tagName}${attrs}>\n`;
   
-  children.forEach(child => {
+  // 子要素を順番に処理
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
     if (child.nodeType === Node.ELEMENT_NODE) {
       const formatted = formatElementRecursive(child, indent + indentSize, indentSize);
       if (formatted) {
@@ -96,21 +119,19 @@ function formatElementRecursive(element, indent, indentSize) {
         result += ' '.repeat(indent + indentSize) + text + '\n';
       }
     }
-  });
+  }
   
   result += `${indentStr}</${tagName}>`;
   return result;
 }
 
 /**
- * コードを処理（シンタックスハイライトとインデント）
+ * ファイルタイプを判定
+ * @param {string} type - ファイルタイプ
+ * @param {string} path - ファイルパス
+ * @returns {string} 言語名（html, css, javascript, json, xml, text）
  */
-export function processCode(content, type, path) {
-  if (!content || content === '(empty file)') {
-    return escapeHtml(content);
-  }
-  
-  // ファイルタイプを判定（typeを優先、なければpathから判定）
+export function detectFileType(type, path) {
   let lang = type ? type.toLowerCase() : '';
   const ext = path ? path.split('.').pop().toLowerCase() : '';
   
@@ -123,6 +144,20 @@ export function processCode(content, type, path) {
     else if (ext === 'xml') lang = 'xml';
     else lang = 'text';
   }
+  
+  return lang;
+}
+
+/**
+ * コードを処理（シンタックスハイライトとインデント）
+ */
+export function processCode(content, type, path) {
+  if (!content || content === '(empty file)') {
+    return escapeHtml(content);
+  }
+  
+  // ファイルタイプを判定
+  const lang = detectFileType(type, path);
   
   // HTMLの場合は最後にインデント処理
   if (lang === 'html') {

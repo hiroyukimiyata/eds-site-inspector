@@ -40,8 +40,11 @@ export function detectBlocks(mainSSR, mainLive, blockResources) {
 /**
  * 要素がBlock要素のルート要素かどうかを判定
  * （親要素に同じブロッククラスを持たない要素がルート要素）
+ * @param {HTMLElement} element - 判定する要素
+ * @param {string} blockName - ブロック名
+ * @returns {boolean} ルート要素の場合true
  */
-function isBlockRootElement(element, blockName) {
+export function isBlockRootElement(element, blockName) {
   if (!element || !element.parentElement) return true;
   
   let parent = element.parentElement;

@@ -5,7 +5,10 @@
   "type": "commonjs",
   "scripts": {
     "build": "node scripts/build.js",
-    "watch": "nodemon --watch src --watch scripts/build.js --exec \"npm run build\""
+    "watch": "nodemon --watch src --watch scripts/build.js --exec \"npm run build\"",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "keywords": [
     "aem",
@@ -17,10 +20,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@vitest/ui": "^4.0.14",
     "esbuild": "^0.24.0",
     "js-beautify": "^1.15.4",
+    "jsdom": "^27.2.0",
     "nodemon": "^3.1.9",
-    "prettier": "^3.7.3"
+    "prettier": "^3.7.3",
+    "vitest": "^4.0.14"
   },
   "dependencies": {
     "marked": "^17.0.1"
