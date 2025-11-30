@@ -20,21 +20,23 @@ try {
     
     panel.onHidden.addListener(() => {
       console.log('[EDS Inspector DevTools] Panel hidden');
-      // DevToolsパネルが閉じられたとき、オーバーレイを非表示にする
-      // 現在のタブIDを取得して、content scriptにメッセージを送信
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs && tabs.length > 0) {
-          const tabId = tabs[0].id;
-          chrome.tabs.sendMessage(tabId, {
-            target: 'eds-content',
-            type: 'set-overlays-visible',
-            payload: { visible: false }
-          }).catch(err => {
-            // エラーは無視（タブが閉じられている可能性がある）
-            console.log('[EDS Inspector DevTools] Failed to hide overlays:', err);
-          });
-        }
+      // DevToolsパネルが閉じられたことをchrome.storageから削除
+      chrome.storage.local.remove('eds-devtools-open').catch(err => {
+        console.error('[EDS Inspector DevTools] Failed to remove devtools-open flag:', err);
       });
+      // DevToolsパネルが閉じられたとき、オーバーレイを非表示にする
+      // chrome.devtools.inspectedWindow.tabIdを使用してcontent scriptにメッセージを送信
+      const tabId = chrome.devtools.inspectedWindow.tabId;
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, {
+          target: 'eds-content',
+          type: 'set-overlays-visible',
+          payload: { visible: false }
+        }).catch(err => {
+          // エラーは無視（タブが閉じられている可能性がある）
+          console.log('[EDS Inspector DevTools] Failed to hide overlays:', err);
+        });
+      }
     });
   });
 } catch (err) {

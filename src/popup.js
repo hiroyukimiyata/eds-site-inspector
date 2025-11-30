@@ -169,32 +169,83 @@
         target: 'eds-content',
         type: 'toggle-overlay',
         payload: { key, value }
+      }).then(response => {
+        // chrome.storageに状態を保存（DevToolsパネルとの同期のため）
+        if (response && response.overlaysEnabled) {
+          chrome.storage.local.set({
+            'eds-overlays-enabled': response.overlaysEnabled
+          }).catch(err => {
+            console.error('[EDS Inspector Popup] Failed to save overlay state:', err);
+          });
+        }
       }).catch(err => {
         console.error('[EDS Inspector Popup] Failed to update overlay state:', err);
       });
     }
 
     // ポップアップが非表示になったときにオーバーレイを非表示にする
+    // ただし、DevToolsパネルが開いている場合は非表示にしない
     window.addEventListener('blur', () => {
-      chrome.tabs.sendMessage(tab.id, {
-        target: 'eds-content',
-        type: 'set-overlays-visible',
-        payload: { visible: false }
+      chrome.storage.local.get('eds-devtools-open').then(result => {
+        // DevToolsパネルが開いていない場合のみオーバーレイを非表示にする
+        if (!result['eds-devtools-open']) {
+          chrome.tabs.sendMessage(tab.id, {
+            target: 'eds-content',
+            type: 'set-overlays-visible',
+            payload: { visible: false }
+          }).catch(err => {
+            // エラーは無視（タブが閉じられている可能性がある）
+          });
+        }
       }).catch(err => {
-        // エラーは無視（タブが閉じられている可能性がある）
+        // エラーが発生した場合は、念のため非表示にする
+        chrome.tabs.sendMessage(tab.id, {
+          target: 'eds-content',
+          type: 'set-overlays-visible',
+          payload: { visible: false }
+        }).catch(() => {
+          // エラーは無視
+        });
       });
     });
 
     // visibilitychangeイベントでも検出（より確実）
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        chrome.tabs.sendMessage(tab.id, {
-          target: 'eds-content',
-          type: 'set-overlays-visible',
-          payload: { visible: false }
+        chrome.storage.local.get('eds-devtools-open').then(result => {
+          // DevToolsパネルが開いていない場合のみオーバーレイを非表示にする
+          if (!result['eds-devtools-open']) {
+            chrome.tabs.sendMessage(tab.id, {
+              target: 'eds-content',
+              type: 'set-overlays-visible',
+              payload: { visible: false }
+            }).catch(err => {
+              // エラーは無視
+            });
+          }
         }).catch(err => {
-          // エラーは無視
+          // エラーが発生した場合は、念のため非表示にする
+          chrome.tabs.sendMessage(tab.id, {
+            target: 'eds-content',
+            type: 'set-overlays-visible',
+            payload: { visible: false }
+          }).catch(() => {
+            // エラーは無視
+          });
         });
+      }
+    });
+
+    // chrome.storageの変更を監視（DevToolsパネルで変更された場合の同期）
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes['eds-overlays-enabled']) {
+        const newValue = changes['eds-overlays-enabled'].newValue;
+        if (newValue) {
+          const { sections, blocks, defaultContent } = newValue;
+          if (sections !== undefined) toggleSections.checked = sections;
+          if (blocks !== undefined) toggleBlocks.checked = blocks;
+          if (defaultContent !== undefined) toggleDefault.checked = defaultContent;
+        }
       }
     });
   } catch (err) {

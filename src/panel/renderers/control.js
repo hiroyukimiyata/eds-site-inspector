@@ -27,6 +27,15 @@ export function renderControl(state, refresh, tabId) {
   sectionsCheckbox.addEventListener('change', async (evt) => {
     try {
       await sendToContent(tabId, 'toggle-overlay', { key: 'sections', value: evt.target.checked });
+      // chrome.storageに状態を保存（ポップアップとの同期のため）
+      const state = await sendToContent(tabId, 'state');
+      if (state && state.overlaysEnabled) {
+        chrome.storage.local.set({
+          'eds-overlays-enabled': state.overlaysEnabled
+        }).catch(err => {
+          console.error('[EDS Inspector Panel] Failed to save overlay state:', err);
+        });
+      }
     } finally {
       refresh();
     }
@@ -52,6 +61,15 @@ export function renderControl(state, refresh, tabId) {
   blocksCheckbox.addEventListener('change', async (evt) => {
     try {
       await sendToContent(tabId, 'toggle-overlay', { key: 'blocks', value: evt.target.checked });
+      // chrome.storageに状態を保存（ポップアップとの同期のため）
+      const state = await sendToContent(tabId, 'state');
+      if (state && state.overlaysEnabled) {
+        chrome.storage.local.set({
+          'eds-overlays-enabled': state.overlaysEnabled
+        }).catch(err => {
+          console.error('[EDS Inspector Panel] Failed to save overlay state:', err);
+        });
+      }
     } finally {
       refresh();
     }
@@ -77,6 +95,15 @@ export function renderControl(state, refresh, tabId) {
   defaultCheckbox.addEventListener('change', async (evt) => {
     try {
       await sendToContent(tabId, 'toggle-overlay', { key: 'defaultContent', value: evt.target.checked });
+      // chrome.storageに状態を保存（ポップアップとの同期のため）
+      const state = await sendToContent(tabId, 'state');
+      if (state && state.overlaysEnabled) {
+        chrome.storage.local.set({
+          'eds-overlays-enabled': state.overlaysEnabled
+        }).catch(err => {
+          console.error('[EDS Inspector Panel] Failed to save overlay state:', err);
+        });
+      }
     } finally {
       refresh();
     }

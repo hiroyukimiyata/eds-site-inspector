@@ -224,12 +224,19 @@ async function scrollAndAnalyze() {
  * パネルを初期化
  */
 async function initializePanel() {
-  console.log('[EDS Inspector Panel] Initializing panel...');
-  const controlPanel = document.querySelector('[data-tab-panel="control"]');
-  
-  try {
-    // ローディング状態を設定
-    setLoading(true);
+    console.log('[EDS Inspector Panel] Initializing panel...');
+    const controlPanel = document.querySelector('[data-tab-panel="control"]');
+    
+    // DevToolsパネルが開いていることをchrome.storageに記録
+    chrome.storage.local.set({
+      'eds-devtools-open': true
+    }).catch(err => {
+      console.error('[EDS Inspector Panel] Failed to set devtools-open flag:', err);
+    });
+    
+    try {
+      // ローディング状態を設定
+      setLoading(true);
     
     // ローディングメッセージを表示
     if (controlPanel) {
@@ -393,6 +400,29 @@ function hideReloadingIndicator() {
 
 console.log('[EDS Inspector Panel] Panel script loaded');
 window.initializePanel = initializePanel;
+
+// chrome.storageの変更を監視（ポップアップで変更された場合の同期）
+// 一度だけ設定するため、グローバルスコープで設定
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes['eds-overlays-enabled']) {
+    const newValue = changes['eds-overlays-enabled'].newValue;
+    if (newValue) {
+      // チェックボックスの状態を更新
+      const sectionsCheckbox = document.getElementById('control-toggle-sections');
+      const blocksCheckbox = document.getElementById('control-toggle-blocks');
+      const defaultCheckbox = document.getElementById('control-toggle-default');
+      if (sectionsCheckbox && newValue.sections !== undefined) {
+        sectionsCheckbox.checked = newValue.sections;
+      }
+      if (blocksCheckbox && newValue.blocks !== undefined) {
+        blocksCheckbox.checked = newValue.blocks;
+      }
+      if (defaultCheckbox && newValue.defaultContent !== undefined) {
+        defaultCheckbox.checked = newValue.defaultContent;
+      }
+    }
+  }
+});
 
 // Detect page navigation and automatically reload
 if (chrome.devtools && chrome.devtools.network) {

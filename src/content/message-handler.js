@@ -263,6 +263,12 @@ export async function handleMessage(message, sender, sendResponse) {
           }
         });
         refreshOverlayPositions();
+        // chrome.storageに状態を保存（ポップアップとDevToolsパネルの同期のため）
+        chrome.storage.local.set({
+          'eds-overlays-enabled': state.overlaysEnabled
+        }).catch(err => {
+          console.error('[EDS Inspector Content] Failed to save overlay state:', err);
+        });
         sendResponse(serializeState());
         break;
       }
