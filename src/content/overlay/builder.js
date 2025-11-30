@@ -29,15 +29,34 @@ export function buildOverlays() {
   state.blocks.forEach((block) => {
     const el = createOverlayElement(block, 'block');
     root.appendChild(el);
-    // Default Contentかどうかを判定
-    const isDefaultContent = block.category && block.category !== 'block';
-    const visible = isDefaultContent 
-      ? state.overlaysEnabled.defaultContent 
-      : state.overlaysEnabled.blocks;
-    state.overlays.push({ element: el, target: block.element, item: block, visible });
+    // overlay.visibleは常にtrueに設定（表示制御はrefreshOverlayPositionsで行う）
+    const isDefaultContent = block.category && 
+                             block.category !== 'block' && 
+                             block.category !== 'button' && 
+                             block.category !== 'icon';
+    state.overlays.push({ element: el, target: block.element, item: block, visible: true });
+    
+    // デバッグログ
+    if (isDefaultContent) {
+      console.log('[EDS Inspector] Built overlay for Default Content:', {
+        id: block.id,
+        name: block.name,
+        category: block.category,
+        hasElement: !!block.element,
+        hasTarget: !!block.element
+      });
+    }
   });
   
-  console.log('[EDS Inspector] Built overlays:', state.overlays.length);
+  const defaultContentOverlays = state.overlays.filter(o => {
+    const cat = o.item.category;
+    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
+  });
+  console.log('[EDS Inspector] Built overlays:', {
+    total: state.overlays.length,
+    defaultContent: defaultContentOverlays.length,
+    overlaysEnabled: state.overlaysEnabled
+  });
   // refreshOverlayPositions()は呼び出し元で呼ばれるため、ここでは呼ばない
 }
 

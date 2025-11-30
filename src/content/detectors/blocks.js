@@ -6,6 +6,18 @@ import { DEFAULT_CONTENT_MAP } from '../constants.js';
 import { state } from '../state.js';
 
 /**
+ * CSSクラス名をエスケープ（CSS.escapeのフォールバック付き）
+ */
+function escapeCSS(className) {
+  if (typeof CSS !== 'undefined' && CSS.escape) {
+    return CSS.escape(className);
+  }
+  // フォールバック: 基本的なエスケープ処理
+  // CSS識別子として無効な文字をエスケープ
+  return className.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+}
+
+/**
  * ブロックを検出（複数のSSRドキュメントに対応）
  */
 export function detectBlocks(ssrDocuments, mainSSR, mainLive, blockResources) {
@@ -34,7 +46,21 @@ export function detectBlocks(ssrDocuments, mainSSR, mainLive, blockResources) {
   // Buttonsの検出
   detectButtons(ssrDocuments, mainSSR, mainLive, blocks, seenElements);
   
-  console.log('[EDS Inspector] Detected blocks:', blocks.map(b => ({ name: b.name, tagName: b.tagName, classes: b.classes })));
+  const defaultContentBlocks = blocks.filter(b => {
+    const cat = b.category;
+    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
+  });
+  
+  console.log('[EDS Inspector] Detected blocks:', {
+    total: blocks.length,
+    defaultContent: defaultContentBlocks.length,
+    blocks: blocks.map(b => ({ 
+      name: b.name, 
+      tagName: b.tagName, 
+      category: b.category,
+      classes: b.classes 
+    }))
+  });
   
   return blocks;
 }
@@ -92,11 +118,11 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
       } else {
         // 通常のブロックはクラス名で検索
         // main要素内を先に検索
-        liveElements = Array.from(mainLive.querySelectorAll(`.${CSS.escape(blockName)}`));
+        liveElements = Array.from(mainLive.querySelectorAll(`.${escapeCSS(blockName)}`));
         
         // main要素内で見つからない場合、ドキュメント全体から検索（side-navigationなどmain外の要素用）
         if (liveElements.length === 0) {
-          liveElements = Array.from(document.querySelectorAll(`.${CSS.escape(blockName)}`));
+          liveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
           if (liveElements.length > 0) {
             console.log('[EDS Inspector] Block', blockName, 'found outside main:', liveElements.length);
           }
@@ -155,7 +181,7 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
               if (blockName === 'header' || blockName === 'footer') {
                 allLiveElements = Array.from(document.querySelectorAll(blockName));
               } else {
-                allLiveElements = Array.from(document.querySelectorAll(`.${CSS.escape(blockName)}`));
+                allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
               }
               
               const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
@@ -166,7 +192,7 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
                 if (blockName === 'header' || blockName === 'footer') {
                   allSSRElements = Array.from(ssrDoc.querySelectorAll(blockName));
                 } else {
-                  allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${CSS.escape(blockName)}`));
+                  allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
                 }
                 
                 console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
@@ -272,11 +298,11 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
     
     try {
       // main要素内を先に検索
-      let liveElements = Array.from(mainLive.querySelectorAll(`.${CSS.escape(blockName)}`));
+      let liveElements = Array.from(mainLive.querySelectorAll(`.${escapeCSS(blockName)}`));
       
       // main要素内で見つからない場合、ドキュメント全体から検索
       if (liveElements.length === 0) {
-        liveElements = Array.from(document.querySelectorAll(`.${CSS.escape(blockName)}`));
+        liveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
         if (liveElements.length > 0) {
           console.log('[EDS Inspector] Block', blockName, 'found outside main in SSR:', liveElements.length);
         }
@@ -317,7 +343,7 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
             
             // SSRマークアップから対応する要素を探す（main要素内を先に検索）
             if (!ssrElement) {
-              const ssrElementsInMain = mainSSR.querySelectorAll(`.${CSS.escape(blockName)}`);
+              const ssrElementsInMain = mainSSR.querySelectorAll(`.${escapeCSS(blockName)}`);
               const liveIndex = Array.from(liveElements).indexOf(liveElement);
               if (liveIndex >= 0 && liveIndex < ssrElementsInMain.length) {
                 ssrElement = ssrElementsInMain[liveIndex];
@@ -326,12 +352,12 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
             
             // main要素内で見つからない場合、複数のSSRドキュメントから検索
             if (!ssrElement) {
-              const allLiveElements = document.querySelectorAll(`.${CSS.escape(blockName)}`);
+              const allLiveElements = document.querySelectorAll(`.${escapeCSS(blockName)}`);
               const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
               
               // すべてのSSRドキュメントを検索
               for (const [url, ssrDoc] of ssrDocuments.entries()) {
-                const allSSRElements = ssrDoc.querySelectorAll(`.${CSS.escape(blockName)}`);
+                const allSSRElements = ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`);
                 console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
                   allSSRElementsCount: allSSRElements.length,
                   allLiveElementsCount: allLiveElements.length,
@@ -386,9 +412,14 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
 
 /**
  * Default Contentを検出（複数のSSRドキュメントに対応）
+ * SSRとCSRで一貫したロジックを使用
  */
 function detectDefaultContent(ssrDocuments, mainSSR, mainLive, blockResources, blocks, seenElements) {
-  console.log('[EDS Inspector] Detecting default content blocks...');
+  console.log('[EDS Inspector] Detecting default content blocks...', {
+    ssrDocumentsCount: ssrDocuments.size,
+    blockResourcesCount: blockResources.size,
+    existingBlocksCount: blocks.length
+  });
   
   // 既に検出されたブロック要素を収集
   const detectedBlockElements = new Set();
@@ -396,42 +427,109 @@ function detectDefaultContent(ssrDocuments, mainSSR, mainLive, blockResources, b
     detectedBlockElements.add(block.element);
   });
   
-  // ブロッククラスを持つ要素も収集（main要素外も含む）
-  blockResources.forEach((blockName) => {
-    try {
-      // headerとfooterはタグ名で検索
-      let blockElements;
-      if (blockName === 'header' || blockName === 'footer') {
-        blockElements = document.querySelectorAll(blockName);
-      } else {
-        // 通常のブロックはクラス名で検索（ドキュメント全体から）
-        blockElements = document.querySelectorAll(`.${CSS.escape(blockName)}`);
-      }
-      blockElements.forEach((el) => {
-        if (el instanceof HTMLElement) {
-          detectedBlockElements.add(el);
+  // ブロッククラスを持つ要素も収集（ライブDOMとSSRドキュメントの両方から）
+  const collectBlockElements = (doc, isSSR = false) => {
+    blockResources.forEach((blockName) => {
+      try {
+        let blockElements;
+        if (blockName === 'header' || blockName === 'footer') {
+          blockElements = doc.querySelectorAll(blockName);
+        } else {
+          blockElements = doc.querySelectorAll(`.${escapeCSS(blockName)}`);
         }
-      });
-    } catch (e) {
-      // 無視
-    }
+        blockElements.forEach((el) => {
+          if (el instanceof HTMLElement) {
+            detectedBlockElements.add(el);
+          }
+        });
+      } catch (e) {
+        // 無視
+      }
+    });
+  };
+  
+  collectBlockElements(document);
+  ssrDocuments.forEach((ssrDoc) => {
+    collectBlockElements(ssrDoc, true);
   });
   
-  // ブロッククラスを持つ要素かどうかを判定する関数
-  function isBlockElement(element) {
+  // ブロック要素かどうかを判定（SSRとCSRで同じロジック）
+  function isBlockElement(element, doc = document) {
     if (!element || !(element instanceof HTMLElement)) return false;
+    
+    // 要素自体がブロック要素かチェック
     if (detectedBlockElements.has(element)) return true;
     const classes = Array.from(element.classList || []);
-    return classes.some(cls => blockResources.has(cls));
+    if (classes.some(cls => blockResources.has(cls))) return true;
+    
+    // 親要素がブロック要素かチェック
+    let parent = element.parentElement;
+    const root = doc.body || doc.documentElement;
+    while (parent && parent !== root) {
+      if (detectedBlockElements.has(parent)) return true;
+      const parentClasses = Array.from(parent.classList || []);
+      if (parentClasses.some(cls => blockResources.has(cls))) return true;
+      parent = parent.parentElement;
+    }
+    
+    return false;
+  }
+  
+  // <p>の直下に<picture>があるかチェック（imageとして検出するため）
+  function isPictureDirectChildOfP(element) {
+    if (!element || element.tagName.toLowerCase() !== 'picture') return false;
+    const parent = element.parentElement;
+    return parent && parent.tagName.toLowerCase() === 'p';
+  }
+  
+  // パスベースでSSR要素とCSR要素をマッピング（一貫したロジック）
+  function findMatchingLiveElement(ssrElement, ssrDoc, mainSSRInDoc, contentDef) {
+    // パスベースでマッピングを試す
+    const path = computeElementPath(ssrElement, mainSSRInDoc);
+    
+    // ライブDOMのmain要素から検索
+    let liveElement = findElementByPath(mainLive, path);
+    if (liveElement && liveElement.tagName.toLowerCase() === contentDef.selector.toLowerCase()) {
+      return liveElement;
+    }
+    
+    // main要素内で見つからない場合、ドキュメント全体から検索
+    liveElement = findElementByPath(document.body, path);
+    if (liveElement && liveElement.tagName.toLowerCase() === contentDef.selector.toLowerCase()) {
+      return liveElement;
+    }
+    
+    // パスベースで見つからない場合、インデックスベースでフォールバック
+    const mainLiveElements = Array.from(mainLive.querySelectorAll(contentDef.selector));
+    const mainSSRElements = Array.from(mainSSRInDoc.querySelectorAll(contentDef.selector));
+    
+    const ssrIndex = mainSSRElements.indexOf(ssrElement);
+    if (ssrIndex >= 0 && ssrIndex < mainLiveElements.length) {
+      const candidateElement = mainLiveElements[ssrIndex];
+      if (candidateElement.tagName.toLowerCase() === contentDef.selector.toLowerCase()) {
+        // テキスト内容の一致を確認（より正確なマッピングのため）
+        const ssrText = ssrElement.textContent?.trim() || '';
+        const liveText = candidateElement.textContent?.trim() || '';
+        const ssrTextShort = ssrText.substring(0, 50);
+        const liveTextShort = liveText.substring(0, 50);
+        // テキストが一致するか、または両方とも空（画像など）の場合はマッピングを許可
+        if (ssrTextShort === liveTextShort || (ssrText === '' && liveText === '')) {
+          return candidateElement;
+        }
+      }
+    }
+    
+    return null;
   }
   
   DEFAULT_CONTENT_MAP.forEach((contentDef) => {
     // すべてのSSRドキュメントから該当する要素を検出
     for (const [url, ssrDoc] of ssrDocuments.entries()) {
+      const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
       let ssrElements;
+      
       try {
         // main要素内を先に検索
-        const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
         ssrElements = mainSSRInDoc.querySelectorAll(contentDef.selector);
         
         // main要素内で見つからない場合、ドキュメント全体から検索
@@ -439,7 +537,6 @@ function detectDefaultContent(ssrDocuments, mainSSR, mainLive, blockResources, b
           ssrElements = ssrDoc.querySelectorAll(contentDef.selector);
         }
       } catch (e) {
-        // セレクタが無効な場合（例: span.icon）はスキップ
         console.warn('[EDS Inspector] Invalid selector:', contentDef.selector, e);
         continue;
       }
@@ -447,94 +544,94 @@ function detectDefaultContent(ssrDocuments, mainSSR, mainLive, blockResources, b
       ssrElements.forEach((ssrEl) => {
         if (!(ssrEl instanceof HTMLElement)) return;
         
-        // textブロック（<p>タグ）内の要素は検出しない
-        const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
-        if (isInsideParagraph(ssrEl, mainSSRInDoc) && contentDef.selector !== 'p') {
+        // SSR要素がブロック要素内にある場合はスキップ
+        if (isBlockElement(ssrEl, ssrDoc)) {
+          console.log('[EDS Inspector] Skipping SSR element (inside block):', {
+            selector: contentDef.selector,
+            element: ssrEl,
+            tagName: ssrEl.tagName.toLowerCase()
+          });
           return;
         }
         
-        // ライブDOMで対応する要素を見つける（ドキュメント全体から検索）
-        const allLiveElements = document.querySelectorAll(contentDef.selector);
-        // SSRドキュメント内でのインデックスを取得
-        const ssrIndex = Array.from(ssrDoc.querySelectorAll(contentDef.selector)).indexOf(ssrEl);
-        const liveElement = allLiveElements[ssrIndex];
-      
-      if (!liveElement) {
-        // パスベースの検出を試す
-        const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
-        const path = computeElementPath(ssrEl, mainSSRInDoc);
-        // ライブDOMのmain要素から検索を試す
-        let pathBasedElement = findElementByPath(mainLive, path);
-        // main要素内で見つからない場合、ドキュメント全体から検索
-        if (!pathBasedElement) {
-          pathBasedElement = findElementByPath(document.body, path);
+        // <p>の直下に<picture>がある場合はimageとして検出（特別扱い）
+        const isPictureInP = isPictureDirectChildOfP(ssrEl);
+        if (isPictureInP && contentDef.selector === 'picture') {
+          // この場合は検出を続行
+        } else if (isInsideParagraph(ssrEl, mainSSRInDoc) && contentDef.selector !== 'p') {
+          // 通常の<p>タグ内の要素は検出しない（<p>タグ自体と<p>直下の<picture>は除く）
+          return;
         }
-        if (!pathBasedElement) return;
         
-        // タグ名が一致することを確認
-        if (pathBasedElement.tagName.toLowerCase() !== contentDef.selector.toLowerCase()) return;
+        // パスベースでCSR要素を見つける（SSRとCSRで一貫したロジック）
+        const liveElement = findMatchingLiveElement(ssrEl, ssrDoc, mainSSRInDoc, contentDef);
+        
+        if (!liveElement) {
+          console.log('[EDS Inspector] No matching live element found for SSR element:', {
+            selector: contentDef.selector,
+            ssrElement: ssrEl,
+            tagName: ssrEl.tagName.toLowerCase(),
+            path: computeElementPath(ssrEl, mainSSRInDoc)
+          });
+          return;
+        }
         
         // 既に検出済みの要素はスキップ
-        if (seenElements.has(pathBasedElement)) return;
+        if (seenElements.has(liveElement)) return;
         
-        // ブロック要素の場合はスキップ
-        if (isBlockElement(pathBasedElement)) {
+        // CSR要素もブロック要素内にある場合はスキップ（SSRとCSRで一貫したチェック）
+        if (isBlockElement(liveElement, document)) {
+          console.log('[EDS Inspector] Skipping live element (inside block):', {
+            selector: contentDef.selector,
+            element: liveElement,
+            tagName: liveElement.tagName.toLowerCase()
+          });
           return;
         }
         
-        // ライブDOMでも<p>タグ内かどうかを確認
-        const mainLiveInDoc = document.querySelector('main') || document.body;
-        if (isInsideParagraph(pathBasedElement, mainLiveInDoc) && contentDef.selector !== 'p') {
+        // CSR要素が<p>タグ内かどうかを確認（<p>タグ自体と<p>直下の<picture>は除く）
+        const isLivePictureInP = isPictureDirectChildOfP(liveElement);
+        if (!isLivePictureInP && isInsideParagraph(liveElement, mainLive) && contentDef.selector !== 'p') {
           return;
         }
         
-        seenElements.add(pathBasedElement);
+        seenElements.add(liveElement);
         
         blocks.push({
           id: `block-${blocks.length}`,
-          element: pathBasedElement,
-          ssrElement: ssrEl, // SSR要素への参照を保存
-          sourceDocumentUrl: url, // どのドキュメントから来たか
+          element: liveElement,
+          ssrElement: ssrEl,
+          sourceDocumentUrl: url,
           name: contentDef.name,
-          tagName: pathBasedElement.tagName.toLowerCase(),
-          classes: pathBasedElement.className || '',
+          tagName: liveElement.tagName.toLowerCase(),
+          classes: liveElement.className || '',
           category: contentDef.category || 'default',
         });
-        console.log('[EDS Inspector] Detected default content:', contentDef.name, 'element:', pathBasedElement, 'from:', url);
-        return;
-      }
-      
-      // 既に検出済みの要素はスキップ
-      if (seenElements.has(liveElement)) return;
-      
-      // main要素外の要素も検出対象とする
-      
-      // ブロック要素の場合はスキップ
-      if (isBlockElement(liveElement)) {
-        return;
-      }
-      
-      // ライブDOMでも<p>タグ内かどうかを確認
-      const mainLiveInDoc = document.querySelector('main') || document.body;
-      if (isInsideParagraph(liveElement, mainLiveInDoc) && contentDef.selector !== 'p') {
-        return;
-      }
-      
-      seenElements.add(liveElement);
-      
-      blocks.push({
-        id: `block-${blocks.length}`,
-        element: liveElement,
-        ssrElement: ssrEl, // SSR要素への参照を保存
-        sourceDocumentUrl: url, // どのドキュメントから来たか
-        name: contentDef.name,
-        tagName: liveElement.tagName.toLowerCase(),
-        classes: liveElement.className || '',
-        category: contentDef.category || 'default',
-      });
-      console.log('[EDS Inspector] Detected default content:', contentDef.name, 'element:', liveElement, 'from:', url);
+        
+        console.log('[EDS Inspector] ✓ Detected default content:', {
+          name: contentDef.name,
+          category: contentDef.category || 'default',
+          selector: contentDef.selector,
+          element: liveElement,
+          ssrElement: ssrEl,
+          sourceDocumentUrl: url,
+          path: computeElementPath(ssrEl, mainSSRInDoc),
+          isPictureInP: isPictureInP || isLivePictureInP,
+          tagName: liveElement.tagName.toLowerCase()
+        });
       });
     }
+  });
+  
+  // 検出結果をログ出力
+  const detectedDefaultContent = blocks.filter(b => {
+    const cat = b.category;
+    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
+  });
+  console.log('[EDS Inspector] Default content detection complete:', {
+    detectedCount: detectedDefaultContent.length,
+    categories: [...new Set(detectedDefaultContent.map(b => b.category))],
+    items: detectedDefaultContent.map(b => ({ name: b.name, category: b.category }))
   });
 }
 

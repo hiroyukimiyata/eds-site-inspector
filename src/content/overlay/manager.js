@@ -121,6 +121,7 @@ export async function refreshOverlayPositions() {
   const viewportOffset = { x: window.scrollX, y: window.scrollY };
   
   let displayedCount = 0;
+  let defaultContentDisplayedCount = 0;
   state.overlays.forEach((overlay) => {
     const { element, target } = overlay;
     if (!target || !element) {
@@ -135,36 +136,78 @@ export async function refreshOverlayPositions() {
     let enabled = false;
     if (overlay.item.id.startsWith('section-')) {
       enabled = state.overlaysEnabled.sections;
-    } else if (overlay.item.category && overlay.item.category !== 'block') {
-      // Default Content（categoryが'block'以外）
-      enabled = state.overlaysEnabled.defaultContent;
     } else {
-      // Blocks（categoryが'block'または未定義）
-      enabled = state.overlaysEnabled.blocks;
+      // Default Contentかどうかを判定（buttonとiconは除外）
+      const isDefaultContent = overlay.item.category && 
+                               overlay.item.category !== 'block' && 
+                               overlay.item.category !== 'button' && 
+                               overlay.item.category !== 'icon';
+      if (isDefaultContent) {
+        // Default Content
+        enabled = state.overlaysEnabled.defaultContent;
+        // デバッグログ
+        if (!enabled) {
+          console.log('[EDS Inspector] Default Content overlay disabled:', {
+            id: overlay.item.id,
+            name: overlay.item.name,
+            category: overlay.item.category,
+            overlaysEnabled: state.overlaysEnabled,
+            visible: overlay.visible
+          });
+        }
+      } else {
+        // Blocks（categoryが'block'、'button'、'icon'または未定義）
+        enabled = state.overlaysEnabled.blocks;
+      }
     }
     const shouldDisplay = overlay.visible && enabled;
     element.style.display = shouldDisplay ? 'block' : 'none';
     if (shouldDisplay) {
       displayedCount++;
+      const isDefaultContent = overlay.item.category && 
+                               overlay.item.category !== 'block' && 
+                               overlay.item.category !== 'button' && 
+                               overlay.item.category !== 'icon';
+      if (isDefaultContent) {
+        defaultContentDisplayedCount++;
+      }
     }
   });
   
-  // デバッグログは必要最小限に（ブリンクの原因を特定するため）
-  if (displayedCount === 0 && state.overlays.length > 0) {
-    console.log('[EDS Inspector] Refreshed overlay positions:', {
-      overlaysCount: state.overlays.length,
-      displayedCount,
-      overlaysVisible: state.overlaysVisible,
-      overlaysEnabled: state.overlaysEnabled
-    });
-  }
+  // デバッグログ
+  const defaultContentOverlays = state.overlays.filter(o => {
+    const cat = o.item.category;
+    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
+  });
   
-  if (displayedCount === 0 && state.overlays.length > 0) {
-    console.warn('[EDS Inspector] No overlays displayed:', {
-      overlaysCount: state.overlays.length,
-      overlaysVisible: state.overlaysVisible,
+  console.log('[EDS Inspector] Refreshed overlay positions:', {
+    totalOverlays: state.overlays.length,
+    defaultContentOverlays: defaultContentOverlays.length,
+    displayedCount,
+    defaultContentDisplayedCount,
+    overlaysVisible: state.overlaysVisible,
+    overlaysEnabled: state.overlaysEnabled,
+    defaultContentDetails: defaultContentOverlays.map(o => ({
+      id: o.item.id,
+      name: o.item.name,
+      category: o.item.category,
+      visible: o.visible,
+      enabled: state.overlaysEnabled.defaultContent
+    }))
+  });
+  
+  if (defaultContentDisplayedCount === 0 && defaultContentOverlays.length > 0) {
+    console.warn('[EDS Inspector] No Default Content overlays displayed:', {
+      defaultContentOverlaysCount: defaultContentOverlays.length,
+      defaultContentDisplayedCount,
       overlaysEnabled: state.overlaysEnabled,
-      overlays: state.overlays.map(o => ({ id: o.item.id, visible: o.visible, category: o.item.category }))
+      defaultContentOverlays: defaultContentOverlays.map(o => ({
+        id: o.item.id,
+        name: o.item.name,
+        category: o.item.category,
+        visible: o.visible,
+        enabled: state.overlaysEnabled.defaultContent
+      }))
     });
   }
 }

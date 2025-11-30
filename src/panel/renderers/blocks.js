@@ -15,18 +15,24 @@ export function renderBlocks(state, refresh, tabId) {
     return;
   }
 
-  // カテゴリごとにグループ化
+  // カテゴリごとにグループ化（Default Contentは除外）
   const blocksByCategory = {};
+  const defaultContentCategories = ['heading', 'text', 'image', 'list', 'code', 'table', 'quote', 'media', 'default'];
+  
   state.blocks.forEach((block) => {
     const category = block.category || 'block';
+    // Default ContentはBlocksタブに表示しない（オーバーレイは表示する）
+    if (defaultContentCategories.includes(category)) {
+      return;
+    }
     if (!blocksByCategory[category]) {
       blocksByCategory[category] = [];
     }
     blocksByCategory[category].push(block);
   });
 
-  // カテゴリの順序を定義
-  const categoryOrder = ['block', 'heading', 'text', 'image', 'list', 'code', 'table', 'quote', 'media', 'button', 'icon'];
+  // カテゴリの順序を定義（Default Contentは除外）
+  const categoryOrder = ['block', 'button', 'icon'];
   
   categoryOrder.forEach((category) => {
     if (!blocksByCategory[category] || blocksByCategory[category].length === 0) return;

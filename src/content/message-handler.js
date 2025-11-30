@@ -62,13 +62,21 @@ async function getBlockDetail(blockId) {
   if (!ssrMarkup && block.name && block.element && state.ssrDocuments.size > 0) {
     console.log('[EDS Inspector] Searching in', state.ssrDocuments.size, 'SSR documents');
     
-    const liveElements = document.querySelectorAll(`.${CSS.escape(block.name)}`);
+    // CSS.escapeのフォールバック
+    const escapeCSS = (className) => {
+      if (typeof CSS !== 'undefined' && CSS.escape) {
+        return CSS.escape(className);
+      }
+      return className.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+    };
+    
+    const liveElements = document.querySelectorAll(`.${escapeCSS(block.name)}`);
     const liveIndex = Array.from(liveElements).indexOf(block.element);
     
     // すべてのSSRドキュメントを検索
     for (const [url, ssrDoc] of state.ssrDocuments.entries()) {
       try {
-        const blockElements = ssrDoc.querySelectorAll(`.${CSS.escape(block.name)}`);
+        const blockElements = ssrDoc.querySelectorAll(`.${escapeCSS(block.name)}`);
         if (blockElements.length > 0) {
           if (liveIndex >= 0 && liveIndex < blockElements.length) {
             const ssrElement = blockElements[liveIndex];
