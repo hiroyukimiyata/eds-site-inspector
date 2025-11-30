@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EDS Site Inspector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <h1 class="popup-title">EDS Site Inspector</h1>
+    </div>
+    <div class="popup-content">
+      <div class="overlay-controls">
+        <div class="control-item">
+          <label class="control-label">
+            <input type="checkbox" id="toggle-sections" class="control-checkbox">
+            <span class="control-text">Sections</span>
+          </label>
+        </div>
+        
+        <div class="control-item">
+          <label class="control-label">
+            <input type="checkbox" id="toggle-blocks" class="control-checkbox">
+            <span class="control-text">Blocks</span>
+          </label>
+        </div>
+        
+        <div class="control-item">
+          <label class="control-label">
+            <input type="checkbox" id="toggle-default" class="control-checkbox">
+            <span class="control-text">Default Content</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="popup-footer">
+        <p class="devtools-hint">Open DevTools for details</p>
+      </div>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
+

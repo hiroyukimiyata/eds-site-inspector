@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>EDS Site Inspector</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body class="eds-panel">
+    <div class="eds-panel__container">
+      <div class="eds-tabs" role="tablist">
+        <button data-tab="control" class="active eds-tab-control" role="tab">Control</button>
+        <div class="eds-tabs-separator"></div>
+        <button data-tab="blocks" role="tab">Blocks</button>
+        <button data-tab="code" role="tab">Scripts</button>
+        <button data-tab="json" role="tab">JSON</button>
+        <button data-tab="media" role="tab">Media</button>
+        <button data-tab="icons" role="tab">Icons</button>
+        <button data-tab="docs" role="tab">Docs (SSR)</button>
+        <div class="eds-tabs-separator"></div>
+        <button data-tab="explore" role="tab">Explore</button>
+      </div>
+      <main>
+        <section data-tab-panel="control"></section>
+        <section data-tab-panel="blocks" hidden></section>
+        <section data-tab-panel="icons" hidden></section>
+        <section data-tab-panel="code" hidden></section>
+        <section data-tab-panel="media" hidden></section>
+        <section data-tab-panel="json" hidden></section>
+        <section data-tab-panel="docs" hidden></section>
+        <section data-tab-panel="explore" hidden></section>
+      </main>
+    </div>
+    <script src="panel.js"></script>
+  </body>
+</html>

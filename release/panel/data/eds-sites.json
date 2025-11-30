@@ -1,0 +1,110 @@
+[
+  {
+    "title": "Adobe Business",
+    "url": "https://business.adobe.com/"
+  },
+  {
+    "title": "Adobe Developer",
+    "url": "https://developer.adobe.com/"
+  },
+  {
+    "title": "Adobe Experience Cloud",
+    "url": "https://business.adobe.com/products/experience-cloud.html"
+  },
+  {
+    "title": "Adobe Creative Cloud",
+    "url": "https://www.adobe.com/creativecloud.html"
+  },
+  {
+    "title": "Adobe Document Cloud",
+    "url": "https://www.adobe.com/documentcloud.html"
+  },
+  {
+    "title": "Adobe Stock",
+    "url": "https://stock.adobe.com/"
+  },
+  {
+    "title": "Adobe Fonts",
+    "url": "https://fonts.adobe.com/"
+  },
+  {
+    "title": "Adobe Color",
+    "url": "https://color.adobe.com/"
+  },
+  {
+    "title": "Adobe Behance",
+    "url": "https://www.behance.net/"
+  },
+  {
+    "title": "Adobe Portfolio",
+    "url": "https://portfolio.adobe.com/"
+  },
+  {
+    "title": "Adobe Experience Manager",
+    "url": "https://business.adobe.com/products/experience-manager/adobe-experience-manager-sites.html"
+  },
+  {
+    "title": "Adobe Analytics",
+    "url": "https://business.adobe.com/products/analytics/adobe-analytics.html"
+  },
+  {
+    "title": "Adobe Target",
+    "url": "https://business.adobe.com/products/target/adobe-target.html"
+  },
+  {
+    "title": "Adobe Marketo",
+    "url": "https://business.adobe.com/products/marketo/marketing-automation.html"
+  },
+  {
+    "title": "Adobe Commerce",
+    "url": "https://business.adobe.com/products/magento/magento-commerce.html"
+  },
+  {
+    "title": "Adobe Campaign",
+    "url": "https://business.adobe.com/products/campaign/adobe-campaign.html"
+  },
+  {
+    "title": "Adobe Real-Time CDP",
+    "url": "https://business.adobe.com/products/real-time-customer-data-platform/rtcdp.html"
+  },
+  {
+    "title": "Adobe Journey Optimizer",
+    "url": "https://business.adobe.com/products/journey-optimizer/adobe-journey-optimizer.html"
+  },
+  {
+    "title": "Adobe Workfront",
+    "url": "https://business.adobe.com/products/workfront/workfront.html"
+  },
+  {
+    "title": "Adobe Experience Platform",
+    "url": "https://business.adobe.com/products/experience-platform/adobe-experience-platform.html"
+  },
+  {
+    "title": "Qantas",
+    "url": "https://www.qantas.com/"
+  },
+  {
+    "title": "UPS",
+    "url": "https://www.ups.com/"
+  },
+  {
+    "title": "H&M UAE",
+    "url": "https://ae.hm.com/"
+  },
+  {
+    "title": "SoftBank Business",
+    "url": "https://www.softbank.jp/business/"
+  },
+  {
+    "title": "AEM Boilerplate XWalk",
+    "url": "https://main--aem-boilerplate-xwalk--adobe-rnd.aem.live/"
+  },
+  {
+    "title": "AEM Boilerplate",
+    "url": "https://main--aem-boilerplate--adobe.aem.live/"
+  },
+  {
+    "title": "Fréscopa Coffee",
+    "url": "https://frescopa.coffee/"
+  }
+]

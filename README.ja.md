@@ -78,11 +78,29 @@ Chrome DevToolsを開き、「EDS Site Inspector」タブに移動すると、�
 
 ## インストール
 
+### クイックインストール（ビルド済みリリース）
+
+ソースからビルドせずに拡張機能をインストールする場合：
+
+1. リポジトリをクローン：
+   ```bash
+   git clone https://github.com/hiroyukimiyata/eds-site-inspector.git
+   cd eds-site-inspector
+   ```
+
+2. Chromeに拡張機能を読み込む：
+   - Chromeを開き、`chrome://extensions/`に移動
+   - 「デベロッパーモード」を有効化（右上のトグル）
+   - 「パッケージ化されていない拡張機能を読み込む」をクリック
+   - このプロジェクトの`release/`ディレクトリを選択
+
+   **注意**: `release/`フォルダが存在しない場合は、自分でビルドするか（下記の「ソースからインストール」を参照）、ビルド後に`dist/`フォルダを使用してください。
+
 ### ソースからインストール
 
 1. リポジトリをクローン：
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/hiroyukimiyata/eds-site-inspector.git
    cd eds-site-inspector
    ```
 

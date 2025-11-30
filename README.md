@@ -78,11 +78,29 @@ Open Chrome DevTools and navigate to the "EDS Site Inspector" tab for detailed a
 
 ## Installation
 
+### Quick Install (Pre-built Release)
+
+If you want to install the extension without building from source:
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/hiroyukimiyata/eds-site-inspector.git
+   cd eds-site-inspector
+   ```
+
+2. Load the extension in Chrome:
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" (toggle in the top right)
+   - Click "Load unpacked"
+   - Select the `release/` directory from this project
+
+   **Note**: If the `release/` folder doesn't exist, you can build it yourself (see "From Source" below) or use the `dist/` folder after building.
+
 ### From Source
 
 1. Clone this repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/hiroyukimiyata/eds-site-inspector.git
    cd eds-site-inspector
    ```
 
