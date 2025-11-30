@@ -72,7 +72,13 @@ export function renderJson(state) {
     
     const url = document.createElement('div');
     url.className = 'eds-file-url';
-    url.textContent = jsonFile.pathname;
+    // クエリパラメータを含むパスを表示
+    try {
+      const urlObj = new URL(jsonFile.url);
+      url.textContent = urlObj.pathname + urlObj.search;
+    } catch (e) {
+      url.textContent = jsonFile.pathname;
+    }
     url.style.cssText = 'font-size: 11px; color: var(--muted); margin-left: 12px; font-family: monospace;';
     
     const toggle = document.createElement('span');

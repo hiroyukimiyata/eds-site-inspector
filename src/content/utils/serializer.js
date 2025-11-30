@@ -7,13 +7,19 @@ import { state } from '../state.js';
  * 状態をシリアライズ
  */
 export function serializeState() {
-  // デバッグ: jsonFilesの状態を確認
+  // デバッグ: jsonFilesとscriptFilesの状態を確認
   console.log('[EDS Inspector Serializer] serializeState() called');
   console.log('[EDS Inspector Serializer] state.jsonFiles:', state.jsonFiles);
+  console.log('[EDS Inspector Serializer] state.scriptFiles:', state.scriptFiles);
   if (state.jsonFiles) {
     console.log('[EDS Inspector Serializer] state.jsonFiles.size:', state.jsonFiles.size);
     const jsonArray = Array.from(state.jsonFiles.values());
     console.log('[EDS Inspector Serializer] jsonFiles array:', jsonArray);
+  }
+  if (state.scriptFiles) {
+    console.log('[EDS Inspector Serializer] state.scriptFiles.size:', state.scriptFiles.size);
+    const scriptArray = Array.from(state.scriptFiles.values());
+    console.log('[EDS Inspector Serializer] scriptFiles array:', scriptArray);
   }
   // ブロックをユニークにする（同じ要素を複数回検出しないようにする）
   const seenElements = new Set();
@@ -75,6 +81,7 @@ export function serializeState() {
       url: file.url,
     })) : null,
     jsonFiles: state.jsonFiles ? Array.from(state.jsonFiles.values()) : null,
+    scriptFiles: state.scriptFiles ? Array.from(state.scriptFiles.values()) : null,
   };
 }
 

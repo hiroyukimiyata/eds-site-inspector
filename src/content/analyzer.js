@@ -5,6 +5,7 @@ import { state } from './state.js';
 import { resolveConfig, parseSSRDocument } from './utils/config.js';
 import { collectBlockResourceNames, collectIconNames } from './collectors/resources.js';
 import { collectJsonFiles } from './collectors/json.js';
+import { collectScriptFiles } from './collectors/scripts.js';
 import { detectSections } from './detectors/sections.js';
 import { detectBlocks } from './detectors/blocks.js';
 import { detectIcons } from './detectors/icons.js';
@@ -34,6 +35,14 @@ export async function analyzePage() {
   console.log('[EDS Inspector Content] About to collect JSON files...');
   state.jsonFiles = collectJsonFiles();
   console.log('[EDS Inspector Content] JSON files collected:', state.jsonFiles ? state.jsonFiles.size : 0);
+  
+  // JSファイルを収集（/blocks/*.js以外）
+  console.log('[EDS Inspector Content] About to collect script files...');
+  state.scriptFiles = collectScriptFiles();
+  console.log('[EDS Inspector Content] Script files collected:', state.scriptFiles ? state.scriptFiles.size : 0);
+  if (state.scriptFiles && state.scriptFiles.size > 0) {
+    console.log('[EDS Inspector Content] Script files:', Array.from(state.scriptFiles.values()).map(f => f.url));
+  }
   
   // Media Busファイルも検出
   await loadCodeAndMedia();

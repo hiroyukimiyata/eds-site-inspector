@@ -7,7 +7,7 @@ import { renderDocs } from './panel/renderers/docs.js';
 import { renderControl } from './panel/renderers/control.js';
 import { renderBlocks } from './panel/renderers/blocks.js';
 import { renderIcons } from './panel/renderers/icons.js';
-import { renderCode } from './panel/renderers/code.js';
+import { renderScripts } from './panel/renderers/code.js';
 import { renderMedia } from './panel/renderers/media.js';
 import { renderJson } from './panel/renderers/json.js';
 import { renderBlockDetail } from './panel/renderers/block-detail.js';
@@ -44,6 +44,18 @@ async function switchTab(tab) {
       }
     } catch (err) {
       console.error('[EDS Inspector Panel] Error loading JSON tab:', err);
+    }
+  }
+  
+  // Scriptsタブが選択されたときだけrenderScriptsを呼ぶ
+  if (tab === 'code') {
+    try {
+      const state = await sendToContentWithTabId('state');
+      if (state) {
+        renderScripts(state);
+      }
+    } catch (err) {
+      console.error('[EDS Inspector Panel] Error loading Scripts tab:', err);
     }
   }
 }
@@ -86,7 +98,7 @@ async function hydratePanels() {
       renderBlocks(state, hydratePanels, tabId);
     }
     renderIcons(state);
-    renderCode(state);
+    renderScripts(state);
     renderMedia(state);
     renderJson(state);
     // renderDocs()はタブ切り替え時のみ呼ぶ

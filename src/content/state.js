@@ -15,5 +15,6 @@ export const state = {
   ssrDocument: null,
   icons: [], // アイコンの一覧
   jsonFiles: null, // JSONファイルの一覧
+  scriptFiles: null, // JSファイルの一覧（/blocks/*.js以外）
 };
 
