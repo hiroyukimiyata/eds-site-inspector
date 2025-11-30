@@ -164,7 +164,9 @@ export function processCode(content, type, path) {
     content = safeIndentHtml(content);
   }
   
-  // シンタックスハイライト
+  // すべてのコードタイプに対して、highlightCodeを使用
+  // highlightCodeは既にエスケープしてからハイライトを適用するため、
+  // コード内の文字列（例：class="eds-code-string"）が誤ってマッチすることはない
   return highlightCode(content, lang);
 }
 

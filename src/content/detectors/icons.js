@@ -5,7 +5,7 @@
 /**
  * アイコンを検出
  */
-export async function detectIcons(mainSSR, mainLive, iconResources) {
+export async function detectIcons(ssrDocuments, mainSSR, mainLive, iconResources) {
   const icons = [];
   const seenElements = new Set();
   const seenIconNames = new Set();

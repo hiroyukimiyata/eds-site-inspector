@@ -7,7 +7,7 @@ import { loadCodeAndMedia } from './api/code-media.js';
 import { serializeState } from './utils/serializer.js';
 import { toggleOverlays, setHighlight, destroy } from './overlay/manager.js';
 import { refreshOverlayPositions } from './overlay/manager.js';
-import { formatHtmlSnippet } from './utils/dom.js';
+import { formatHtmlSnippet, computeElementPath, findElementByPath } from './utils/dom.js';
 import { getBlockAssets } from './api/block-assets.js';
 import { enableAutoUpdate, disableAutoUpdate } from './utils/auto-update.js';
 import { init } from './analyzer.js';
@@ -35,9 +35,68 @@ export function notifyStateChanged() {
 async function getBlockDetail(blockId) {
   const block = state.blocks.find((b) => b.id === blockId);
   if (!block) return null;
+  
+  console.log('[EDS Inspector] getBlockDetail called for block:', blockId, {
+    blockName: block.name,
+    hasSSRElement: !!block.ssrElement,
+    hasSSRDocument: !!state.ssrDocument,
+    hasElement: !!block.element
+  });
+  
+  // CSRマークアップ（ライブDOMから）
   const markup = formatHtmlSnippet(block.element);
+  
+  // SSRマークアップを取得
+  let ssrMarkup = null;
+  // ブロック検出時に保存されたSSR要素への参照を使用
+  if (block.ssrElement) {
+    try {
+      ssrMarkup = formatHtmlSnippet(block.ssrElement);
+      console.log('[EDS Inspector] SSR markup retrieved from saved reference, length:', ssrMarkup?.length);
+    } catch (e) {
+      console.warn('[EDS Inspector] Failed to get SSR markup from saved reference:', e);
+    }
+  }
+  
+  // SSR要素が見つからない場合、複数のSSRドキュメントから検索
+  if (!ssrMarkup && block.name && block.element && state.ssrDocuments.size > 0) {
+    console.log('[EDS Inspector] Searching in', state.ssrDocuments.size, 'SSR documents');
+    
+    const liveElements = document.querySelectorAll(`.${CSS.escape(block.name)}`);
+    const liveIndex = Array.from(liveElements).indexOf(block.element);
+    
+    // すべてのSSRドキュメントを検索
+    for (const [url, ssrDoc] of state.ssrDocuments.entries()) {
+      try {
+        const blockElements = ssrDoc.querySelectorAll(`.${CSS.escape(block.name)}`);
+        if (blockElements.length > 0) {
+          if (liveIndex >= 0 && liveIndex < blockElements.length) {
+            const ssrElement = blockElements[liveIndex];
+            ssrMarkup = formatHtmlSnippet(ssrElement);
+            console.log('[EDS Inspector] SSR markup retrieved from SSR document:', url, 'length:', ssrMarkup?.length);
+            break;
+          } else if (blockElements.length === 1) {
+            // 1つしかない場合はそれを使用
+            const ssrElement = blockElements[0];
+            ssrMarkup = formatHtmlSnippet(ssrElement);
+            console.log('[EDS Inspector] SSR markup retrieved from SSR document (single match):', url, 'length:', ssrMarkup?.length);
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('[EDS Inspector] Failed to search in SSR document:', url, e);
+      }
+    }
+  }
+  
   const assets = await getBlockAssets(block.name);
-  return { block, markup, assets };
+  const result = { block, markup, ssrMarkup, assets };
+  console.log('[EDS Inspector] getBlockDetail returning:', {
+    hasSSRMarkup: !!ssrMarkup,
+    ssrMarkupLength: ssrMarkup?.length,
+    assetsCount: assets?.length
+  });
+  return result;
 }
 
 /**
@@ -104,56 +163,62 @@ export async function handleMessage(message, sender, sendResponse) {
     switch (message.type) {
       case 'init': {
         console.log('[EDS Inspector Content] Initializing...');
-        // 既に解析済みの場合はスキップ
-        if (state.isAnalyzed) {
-          console.log('[EDS Inspector Content] Already analyzed, skipping init()');
-          const serializedState = serializeState();
-          sendResponse(serializedState);
-          break;
-        }
-        
-        // 既に実行されている場合でも、初期化を再実行できるようにする
-        if (window.__edsInspectorInitialized) {
-          console.log('[EDS Inspector Content] Re-initializing...');
-          // 既存のオーバーレイを削除
-          destroy();
-          // 状態をリセット
-          state.overlays = [];
-          state.sections = [];
-          state.blocks = [];
-          state.icons = [];
-          state.isAnalyzed = false; // 解析済みフラグもリセット
-        }
-        // オーバーレイを表示状態にする（確実にtrueに設定）
-        state.overlaysVisible = true;
-        state.overlaysEnabled = { sections: true, blocks: true, defaultContent: true };
-        console.log('[EDS Inspector Content] State set before init:', {
-          overlaysVisible: state.overlaysVisible,
-          overlaysEnabled: state.overlaysEnabled
-        });
-        
-        const snapshot = await init();
-        console.log('[EDS Inspector Content] Initialization complete:', snapshot);
-        
-        // 初期化後、確実にoverlaysVisibleがtrueのままであることを確認
-        state.overlaysVisible = true;
-        state.overlaysEnabled = { sections: true, blocks: true, defaultContent: true };
-        
-        // init()内で既にrefreshOverlayPositions()が呼ばれているため、
-        // ここでは呼ばない（ブリンクを防ぐため）
-        // DOMが完全に読み込まれるまで少し待ってから一度だけ更新
-        setTimeout(() => {
-          console.log('[EDS Inspector Content] Final overlay refresh after init, state:', {
-            overlaysVisible: state.overlaysVisible,
-            overlaysEnabled: state.overlaysEnabled,
-            overlaysCount: state.overlays.length
-          });
-          // 状態を再確認してから更新
+        try {
+          // 既に解析済みの場合はスキップ
+          if (state.isAnalyzed) {
+            console.log('[EDS Inspector Content] Already analyzed, skipping init()');
+            const serializedState = serializeState();
+            sendResponse(serializedState);
+            break;
+          }
+          
+          // 既に実行されている場合でも、初期化を再実行できるようにする
+          if (window.__edsInspectorInitialized) {
+            console.log('[EDS Inspector Content] Re-initializing...');
+            // 既存のオーバーレイを削除
+            destroy();
+            // 状態をリセット
+            state.overlays = [];
+            state.sections = [];
+            state.blocks = [];
+            state.icons = [];
+            state.ssrDocuments = new Map();
+            state.isAnalyzed = false; // 解析済みフラグもリセット
+          }
+          // オーバーレイを表示状態にする（確実にtrueに設定）
           state.overlaysVisible = true;
-          refreshOverlayPositions();
-        }, 300);
-        
-        sendResponse(snapshot);
+          state.overlaysEnabled = { sections: true, blocks: true, defaultContent: true };
+          console.log('[EDS Inspector Content] State set before init:', {
+            overlaysVisible: state.overlaysVisible,
+            overlaysEnabled: state.overlaysEnabled
+          });
+          
+          const snapshot = await init();
+          console.log('[EDS Inspector Content] Initialization complete:', snapshot);
+          
+          // 初期化後、確実にoverlaysVisibleがtrueのままであることを確認
+          state.overlaysVisible = true;
+          state.overlaysEnabled = { sections: true, blocks: true, defaultContent: true };
+          
+          // init()内で既にrefreshOverlayPositions()が呼ばれているため、
+          // ここでは呼ばない（ブリンクを防ぐため）
+          // DOMが完全に読み込まれるまで少し待ってから一度だけ更新
+          setTimeout(() => {
+            console.log('[EDS Inspector Content] Final overlay refresh after init, state:', {
+              overlaysVisible: state.overlaysVisible,
+              overlaysEnabled: state.overlaysEnabled,
+              overlaysCount: state.overlays.length
+            });
+            // 状態を再確認してから更新
+            state.overlaysVisible = true;
+            refreshOverlayPositions().catch(console.error);
+          }, 300);
+          
+          sendResponse(snapshot);
+        } catch (err) {
+          console.error('[EDS Inspector Content] Error in init handler:', err);
+          sendResponse({ ok: false, error: err.message, stack: err.stack });
+        }
         break;
       }
       case 'reanalyze': {
@@ -202,18 +267,29 @@ export async function handleMessage(message, sender, sendResponse) {
         break;
       }
       case 'toggle-overlays': {
-        toggleOverlays();
+        await toggleOverlays();
         sendResponse({ ok: true, visible: state.overlaysVisible });
         break;
       }
       case 'refresh-overlays': {
-        refreshOverlayPositions();
+        await refreshOverlayPositions();
         sendResponse({ ok: true });
         break;
       }
       case 'set-overlays-visible': {
-        state.overlaysVisible = message.payload.visible;
-        refreshOverlayPositions();
+        const newVisible = message.payload.visible;
+        console.log('[EDS Inspector Content] set-overlays-visible:', {
+          old: state.overlaysVisible,
+          new: newVisible,
+          overlaysCount: state.overlays.length
+        });
+        state.overlaysVisible = newVisible;
+        // 状態を確実に反映するため、少し待ってから更新
+        await refreshOverlayPositions();
+        // 念のため、もう一度更新（確実に表示されるように）
+        setTimeout(() => {
+          refreshOverlayPositions().catch(console.error);
+        }, 100);
         sendResponse({ ok: true, visible: state.overlaysVisible });
         break;
       }
@@ -233,7 +309,7 @@ export async function handleMessage(message, sender, sendResponse) {
           block.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
           // スクロール後にオーバーレイの位置を更新
           setTimeout(() => {
-            refreshOverlayPositions();
+            refreshOverlayPositions().catch(console.error);
             setHighlight(message.payload.id);
           }, 300);
         }
@@ -263,8 +339,42 @@ export async function handleMessage(message, sender, sendResponse) {
           name: block.name,
           tagName: block.tagName,
           classes: block.classes,
-          category: block.category || 'block'
+          category: block.category || 'block',
+          sourceDocumentUrl: block.sourceDocumentUrl || null
         })));
+        break;
+      }
+      case 'get-fetched-html-documents': {
+        // SSRドキュメントのリストを返す（メインドキュメントを除外）
+        const documents = Array.from(state.ssrDocuments.entries())
+          .filter(([url]) => url !== state.mainDocumentUrl) // メインドキュメントを除外
+          .map(([url, doc]) => {
+            const html = doc.documentElement.outerHTML;
+            return {
+              url,
+              length: html.length,
+              isMain: false
+            };
+          });
+        sendResponse(documents);
+        break;
+      }
+      case 'get-fetched-html-content': {
+        // 指定されたURLの生のHTMLコンテンツを返す（.plain.htmlの場合は生のHTML文字列）
+        const url = message.payload.url;
+        // まず生のHTML文字列を取得
+        const rawHtml = state.htmlDocuments.get(url);
+        if (rawHtml) {
+          sendResponse(rawHtml);
+        } else {
+          // 生のHTMLがない場合は、パース済みのDOMから取得（フォールバック）
+          const doc = state.ssrDocuments.get(url);
+          if (doc) {
+            sendResponse(doc.documentElement.outerHTML);
+          } else {
+            sendResponse(null);
+          }
+        }
         break;
       }
       case 'show-devtools-prompt': {

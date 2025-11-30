@@ -1,5 +1,6 @@
 /**
  * 現在のURLからMarkdownファイルのURLを生成
+ * .plain.html の場合は .md に変換（.plain.md は使わない）
  * @param {string} currentUrl - 現在のページのURL
  * @returns {string|null} MarkdownファイルのURL、生成できない場合はnull
  */
@@ -12,15 +13,23 @@ export function getMarkdownUrl(currentUrl) {
     if (pathname.endsWith('/')) {
       pathname += 'index.md';
     } else {
-      // 既存の拡張子を.mdに置き換え、拡張子がない場合は.mdを追加
-      const pathParts = pathname.split('.');
-      if (pathParts.length > 1) {
-        // 拡張子がある場合は置き換え
-        pathParts[pathParts.length - 1] = 'md';
-        pathname = pathParts.join('.');
+      // .plain.html の場合は .md に変換（.plain.md は使わない）
+      if (pathname.endsWith('.plain.html')) {
+        pathname = pathname.replace(/\.plain\.html$/, '.md');
+      } else if (pathname.endsWith('.html')) {
+        // .html の場合は .md に置き換え
+        pathname = pathname.replace(/\.html$/, '.md');
       } else {
-        // 拡張子がない場合は追加
-        pathname += '.md';
+        // 既存の拡張子を.mdに置き換え、拡張子がない場合は.mdを追加
+        const pathParts = pathname.split('.');
+        if (pathParts.length > 1) {
+          // 拡張子がある場合は置き換え
+          pathParts[pathParts.length - 1] = 'md';
+          pathname = pathParts.join('.');
+        } else {
+          // 拡張子がない場合は追加
+          pathname += '.md';
+        }
       }
     }
     

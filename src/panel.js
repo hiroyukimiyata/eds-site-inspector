@@ -11,6 +11,7 @@ import { renderScripts } from './panel/renderers/code.js';
 import { renderMedia } from './panel/renderers/media.js';
 import { renderJson } from './panel/renderers/json.js';
 import { renderBlockDetail } from './panel/renderers/block-detail.js';
+import { renderExplore } from './panel/renderers/explore.js';
 
 const tabId = chrome.devtools.inspectedWindow.tabId;
 console.log('[EDS Inspector Panel] Tab ID:', tabId);
@@ -84,6 +85,11 @@ async function switchTab(tab) {
       console.error('[EDS Inspector Panel] Error loading Scripts tab:', err);
     }
   }
+  
+  // Exploreタブが選択されたときだけrenderExploreを呼ぶ
+  if (tab === 'explore') {
+    renderExplore();
+  }
 }
 
 /**
@@ -100,6 +106,42 @@ function bindTabs() {
 let isUpdating = false;
 
 /**
+ * ローディング状態を設定
+ */
+function setLoading(loading) {
+  const tabs = document.querySelectorAll('.eds-tabs button');
+  tabs.forEach(btn => {
+    btn.disabled = loading;
+    if (loading) {
+      btn.style.opacity = '0.5';
+      btn.style.cursor = 'not-allowed';
+    } else {
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+    }
+  });
+  
+  // ローディング表示
+  const main = document.querySelector('main');
+  if (loading) {
+    const existingLoading = main.querySelector('.eds-loading-overlay');
+    if (!existingLoading) {
+      const loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'eds-loading-overlay';
+      loadingOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(11, 18, 32, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+      loadingOverlay.innerHTML = '<div class="eds-loading" style="padding: 20px; text-align: center;">Loading...</div>';
+      main.style.position = 'relative';
+      main.appendChild(loadingOverlay);
+    }
+  } else {
+    const existingLoading = main.querySelector('.eds-loading-overlay');
+    if (existingLoading) {
+      existingLoading.remove();
+    }
+  }
+}
+
+/**
  * パネルをハイドレート（状態を取得してUIを更新）
  */
 async function hydratePanels() {
@@ -110,12 +152,25 @@ async function hydratePanels() {
   
   try {
     isUpdating = true;
+    setLoading(true);
     console.log('[EDS Inspector Panel] Fetching state from content script...');
     const state = await sendToContentWithTabId('state');
     console.log('[EDS Inspector Panel] State received:', state);
     if (!state) {
       throw new Error('No state received from content script');
     }
+    
+    // DevToolsパネルが開かれたときは、オーバーレイを確実に表示状態にする
+    if (!state.overlaysVisible) {
+      console.log('[EDS Inspector Panel] Overlays not visible, ensuring visibility...');
+      await sendToContentWithTabId('set-overlays-visible', { visible: true });
+      // 状態を再取得
+      const updatedState = await sendToContentWithTabId('state');
+      if (updatedState) {
+        Object.assign(state, updatedState);
+      }
+    }
+    
     renderControl(state, hydratePanels, tabId);
     if (state.selectedBlock) {
       const detail = await sendToContentWithTabId('get-block-detail', { id: state.selectedBlock });
@@ -149,6 +204,7 @@ async function hydratePanels() {
     throw err;
   } finally {
     isUpdating = false;
+    setLoading(false);
   }
 }
 
@@ -172,6 +228,9 @@ async function initializePanel() {
   const controlPanel = document.querySelector('[data-tab-panel="control"]');
   
   try {
+    // ローディング状態を設定
+    setLoading(true);
+    
     // ローディングメッセージを表示
     if (controlPanel) {
       controlPanel.innerHTML = '<div class="eds-loading" style="padding: 20px;">Initializing EDS Site Inspector...</div>';
@@ -232,6 +291,11 @@ async function initializePanel() {
       if (currentState && currentState.isAnalyzed) {
         isAlreadyAnalyzed = true;
         console.log('[EDS Inspector Panel] Already analyzed, skipping initialization');
+        // 解析済みでも、オーバーレイが非表示の場合は表示状態にする
+        if (!currentState.overlaysVisible) {
+          console.log('[EDS Inspector Panel] Overlays not visible, ensuring visibility...');
+          await sendToContentWithTabId('set-overlays-visible', { visible: true });
+        }
       }
     } catch (e) {
       console.log('[EDS Inspector Panel] Could not check state, will initialize:', e);
@@ -286,6 +350,8 @@ async function initializePanel() {
         </div>
       `;
     }
+  } finally {
+    setLoading(false);
   }
 }
 

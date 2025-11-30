@@ -103,6 +103,12 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[EDS Inspector] Message received:', message);
   
+  // pingメッセージに応答（ポップアップまたはDevToolsの存在確認用）
+  if (message?.type === 'ping') {
+    sendResponse({ ok: true });
+    return false;
+  }
+  
   if (message?.type === 'eds-init-devtools' && message.tabId) {
     (async () => {
       console.log('[EDS Inspector] Received eds-init-devtools message for tab:', message.tabId);

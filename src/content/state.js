@@ -12,7 +12,9 @@ export const state = {
   mediaBasePath: null,
   codeTree: null,
   mediaFiles: null,
-  ssrDocument: null,
+  ssrDocuments: new Map(), // 複数のSSRドキュメント（URL -> Documentオブジェクト）
+  htmlDocuments: new Map(), // 生のHTML文字列（URL -> HTML文字列）
+  mainDocumentUrl: null, // メインドキュメントのURL
   icons: [], // アイコンの一覧
   jsonFiles: null, // JSONファイルの一覧
   scriptFiles: null, // JSファイルの一覧（/blocks/*.js以外）

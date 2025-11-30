@@ -36,40 +36,263 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   root.innerHTML = '';
   root.appendChild(backButton);
   
-  // Source表示の内容を追加
-  const meta = document.createElement('div');
-  meta.className = 'eds-meta';
-  meta.innerHTML = `
-    <div><strong>Name:</strong> ${detail.block.name}</div>
-    <div><strong>Tag:</strong> ${detail.block.tagName}</div>
-    <div><strong>Classes:</strong> ${detail.block.classes || '(none)'}</div>
-    <div><strong>Detected via:</strong> <span class="eds-inline-code">/blocks/${detail.block.name}</span></div>
-  `;
+  // ブロック名を大きく表示
+  const blockNameHeader = document.createElement('div');
+  blockNameHeader.className = 'eds-block-name-header';
+  blockNameHeader.textContent = detail.block.name;
+  blockNameHeader.style.cssText = 'font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border);';
 
-  root.appendChild(meta);
+  root.appendChild(blockNameHeader);
 
   // 同じ名前のブロックを取得（content scriptからすべて取得）
   const blocksWithSameName = await sendToContent(tabId, 'get-blocks-by-name', { name: detail.block.name });
   const currentBlockIndex = blocksWithSameName.findIndex(b => b.id === detail.block.id);
   const hasMultipleBlocks = blocksWithSameName.length > 1;
 
-  // Markupをassetsリストの先頭に追加
-  const allAssets = [];
-  const markupContent = detail.markup || 'No markup captured for this block.';
-  if (markupContent !== 'No markup captured for this block.') {
-    allAssets.push({
-      path: 'Markup (CSR)',
-      type: 'html',
-      content: markupContent,
-      isMarkup: true
+
+  // Markupセクション（SSRとCSRをセットで表示）
+  const markupSection = document.createElement('div');
+  markupSection.className = 'eds-markup-section';
+  markupSection.style.cssText = 'margin-bottom: 24px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
+  
+  const markupHeader = document.createElement('div');
+  markupHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-muted); cursor: pointer;';
+  
+  const markupTitleWrapper = document.createElement('div');
+  markupTitleWrapper.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+  
+  const markupTitle = document.createElement('div');
+  markupTitle.textContent = 'Markup';
+  markupTitle.style.cssText = 'font-weight: 600; color: var(--text); font-size: 14px;';
+  
+  // インスタンス切り替えUI（複数インスタンスがある場合、検索UIスタイルで表示）
+  if (hasMultipleBlocks) {
+    const instanceNav = document.createElement('div');
+    instanceNav.style.cssText = 'display: flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px;';
+    
+    const prevBtn = document.createElement('button');
+    prevBtn.innerHTML = '◀';
+    prevBtn.disabled = currentBlockIndex === 0;
+    prevBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s; display: flex; align-items: center; justify-content: center;';
+    prevBtn.disabled && (prevBtn.style.opacity = '0.5');
+    prevBtn.disabled && (prevBtn.style.cursor = 'not-allowed');
+    prevBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (currentBlockIndex > 0 && !prevBtn.disabled) {
+        const currentExpandedPaths = new Set();
+        const markupContent = root.querySelector('.eds-markup-content');
+        if (markupContent && markupContent.style.display !== 'none') {
+          currentExpandedPaths.add('markup-section');
+        }
+        
+        const prevBlock = blocksWithSameName[currentBlockIndex - 1];
+        await sendToContent(tabId, 'select-block', { id: prevBlock.id });
+        await sendToContent(tabId, 'scroll-to-block', { id: prevBlock.id });
+        await sendToContent(tabId, 'highlight', { id: prevBlock.id });
+        const prevDetail = await sendToContent(tabId, 'get-block-detail', { id: prevBlock.id });
+        await renderBlockDetailWithExpandedPaths(state, prevDetail, refresh, tabId, currentExpandedPaths);
+      }
     });
+    
+    const navInfo = document.createElement('span');
+    navInfo.textContent = `${currentBlockIndex + 1} / ${blocksWithSameName.length}`;
+    navInfo.style.cssText = 'font-size: 12px; color: var(--text); padding: 0 8px; min-width: 50px; text-align: center; font-weight: 500;';
+    
+    const nextBtn = document.createElement('button');
+    nextBtn.innerHTML = '▶';
+    nextBtn.disabled = currentBlockIndex === blocksWithSameName.length - 1;
+    nextBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s; display: flex; align-items: center; justify-content: center;';
+    nextBtn.disabled && (nextBtn.style.opacity = '0.5');
+    nextBtn.disabled && (nextBtn.style.cursor = 'not-allowed');
+    nextBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (currentBlockIndex < blocksWithSameName.length - 1 && !nextBtn.disabled) {
+        const currentExpandedPaths = new Set();
+        const markupContent = root.querySelector('.eds-markup-content');
+        if (markupContent && markupContent.style.display !== 'none') {
+          currentExpandedPaths.add('markup-section');
+        }
+        
+        const nextBlock = blocksWithSameName[currentBlockIndex + 1];
+        await sendToContent(tabId, 'select-block', { id: nextBlock.id });
+        await sendToContent(tabId, 'scroll-to-block', { id: nextBlock.id });
+        await sendToContent(tabId, 'highlight', { id: nextBlock.id });
+        const nextDetail = await sendToContent(tabId, 'get-block-detail', { id: nextBlock.id });
+        await renderBlockDetailWithExpandedPaths(state, nextDetail, refresh, tabId, currentExpandedPaths);
+      }
+    });
+    
+    instanceNav.appendChild(prevBtn);
+    instanceNav.appendChild(navInfo);
+    instanceNav.appendChild(nextBtn);
+    markupTitleWrapper.appendChild(markupTitle);
+    markupTitleWrapper.appendChild(instanceNav);
+  } else {
+    markupTitleWrapper.appendChild(markupTitle);
   }
   
+  const markupToggle = document.createElement('span');
+  markupToggle.className = 'eds-markup-toggle';
+  markupToggle.textContent = '▼';
+  markupToggle.style.cssText = 'font-size: 10px; color: var(--muted); transition: transform 0.2s;';
+  
+  markupHeader.appendChild(markupTitleWrapper);
+  markupHeader.appendChild(markupToggle);
+  
+  const markupContent = document.createElement('div');
+  markupContent.className = 'eds-markup-content';
+  markupContent.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; background: var(--bg);';
+  
+  // SSRマークアップ
+  const ssrMarkupContent = detail.ssrMarkup || null;
+  const ssrContainer = document.createElement('div');
+  ssrContainer.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
+  
+  const ssrHeader = document.createElement('div');
+  ssrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
+  
+  const ssrTitle = document.createElement('div');
+  ssrTitle.textContent = 'Markup (SSR)';
+  ssrTitle.style.cssText = 'font-weight: 600; color: var(--text); font-size: 12px; margin-bottom: 4px;';
+  
+  const ssrDocInfo = document.createElement('div');
+  if (detail.block.sourceDocumentUrl) {
+    try {
+      const urlObj = new URL(detail.block.sourceDocumentUrl);
+      const isMain = detail.block.sourceDocumentUrl === window.location.href.split('?')[0];
+      ssrDocInfo.textContent = `Source: ${urlObj.pathname}${isMain ? ' (Main)' : ''}`;
+    } catch (e) {
+      ssrDocInfo.textContent = `Source: ${detail.block.sourceDocumentUrl}`;
+    }
+  } else {
+    ssrDocInfo.textContent = 'Source: Unknown';
+  }
+  ssrDocInfo.style.cssText = 'font-size: 10px; color: var(--text-muted);';
+  
+  ssrHeader.appendChild(ssrTitle);
+  ssrHeader.appendChild(ssrDocInfo);
+  
+  const ssrCodeContainer = document.createElement('div');
+  ssrCodeContainer.style.cssText = 'position: relative;';
+  
+  if (ssrMarkupContent) {
+    // 検索UIを追加
+    const searchKey = `markup-ssr-${detail.block.id}`;
+    const searchUI = createSearchUI(ssrCodeContainer, ssrMarkupContent, searchKey);
+    
+    const codeWrapper = document.createElement('div');
+    codeWrapper.style.cssText = 'padding: 12px; max-height: 400px; overflow-y: auto;';
+    
+    const processedCode = processCode(ssrMarkupContent, 'html', 'Markup (SSR)');
+    const pre = document.createElement('pre');
+    pre.className = 'eds-code';
+    pre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-x: auto; margin: 0;';
+    const code = document.createElement('code');
+    code.innerHTML = processedCode;
+    code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; line-height: 1.5; display: block;';
+    pre.appendChild(code);
+    codeWrapper.appendChild(pre);
+    
+    ssrCodeContainer.appendChild(searchUI);
+    ssrCodeContainer.appendChild(codeWrapper);
+  } else {
+    ssrCodeContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 12px; margin: 0; padding: 12px;">No SSR markup available</p>';
+  }
+  
+  ssrContainer.appendChild(ssrHeader);
+  ssrContainer.appendChild(ssrCodeContainer);
+  
+  // CSRマークアップ
+  const csrMarkupContent = detail.markup || 'No markup captured for this block.';
+  const csrContainer = document.createElement('div');
+  csrContainer.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
+  
+  const csrHeader = document.createElement('div');
+  csrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
+  
+  const csrTitle = document.createElement('div');
+  csrTitle.textContent = 'Markup (CSR)';
+  csrTitle.style.cssText = 'font-weight: 600; color: var(--text); font-size: 12px; margin-bottom: 4px;';
+  
+  // SSR側と同じ高さにするためのスペーサー
+  const csrSpacer = document.createElement('div');
+  csrSpacer.style.cssText = 'font-size: 10px; height: 14px;'; // ssrDocInfoと同じ高さ
+  
+  csrHeader.appendChild(csrTitle);
+  csrHeader.appendChild(csrSpacer);
+  
+  const csrCodeContainer = document.createElement('div');
+  csrCodeContainer.style.cssText = 'position: relative;';
+  
+  if (csrMarkupContent !== 'No markup captured for this block.') {
+    // 検索UIを追加
+    const searchKey = `markup-csr-${detail.block.id}`;
+    const searchUI = createSearchUI(csrCodeContainer, csrMarkupContent, searchKey);
+    
+    const codeWrapper = document.createElement('div');
+    codeWrapper.style.cssText = 'padding: 12px; max-height: 400px; overflow-y: auto;';
+    
+    const processedCode = processCode(csrMarkupContent, 'html', 'Markup (CSR)');
+    const pre = document.createElement('pre');
+    pre.className = 'eds-code';
+    pre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-x: auto; margin: 0;';
+    const code = document.createElement('code');
+    code.innerHTML = processedCode;
+    code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 11px; line-height: 1.5; display: block;';
+    pre.appendChild(code);
+    codeWrapper.appendChild(pre);
+    
+    csrCodeContainer.appendChild(searchUI);
+    csrCodeContainer.appendChild(codeWrapper);
+  } else {
+    csrCodeContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 12px; margin: 0; padding: 12px;">No CSR markup available</p>';
+  }
+  
+  csrContainer.appendChild(csrHeader);
+  csrContainer.appendChild(csrCodeContainer);
+  
+  markupContent.appendChild(ssrContainer);
+  markupContent.appendChild(csrContainer);
+  
+  // 開閉状態を管理（デフォルトで開いた状態）
+  const wasMarkupExpanded = expandedPaths.has('markup-section');
+  // デフォルトで開いた状態にする（expandedPathsにない場合は開く）
+  if (!expandedPaths.has('markup-section')) {
+    expandedPaths.add('markup-section');
+  }
+  markupContent.style.display = 'grid';
+  markupToggle.textContent = '▼';
+  
+  markupHeader.addEventListener('click', () => {
+    const isExpanded = markupContent.style.display !== 'none';
+    if (isExpanded) {
+      markupContent.style.display = 'none';
+      markupToggle.textContent = '▶';
+      expandedPaths.delete('markup-section');
+    } else {
+      markupContent.style.display = 'grid';
+      markupToggle.textContent = '▼';
+      expandedPaths.add('markup-section');
+    }
+  });
+  
+  markupSection.appendChild(markupHeader);
+  markupSection.appendChild(markupContent);
+  root.appendChild(markupSection);
+
+  // その他のアセット（JS、CSSなど）
+  const allAssets = [];
   if (detail.assets && detail.assets.length) {
     allAssets.push(...detail.assets);
   }
 
   if (allAssets.length > 0) {
+    // Codeセクションのタイトル
+    const codeTitle = document.createElement('h3');
+    codeTitle.textContent = 'Code';
+    codeTitle.style.cssText = 'font-size: 14px; font-weight: 600; color: var(--text); margin: 24px 0 12px 0;';
+    root.appendChild(codeTitle);
+    
     // 全て開く/閉じるボタン
     const controls = document.createElement('div');
     controls.className = 'eds-asset-controls';
@@ -112,15 +335,10 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
     const list = document.createElement('ul');
     list.className = 'eds-file-list';
     allAssets.forEach((asset) => {
-      const li = createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockIndex, hasMultipleBlocks, state, refresh, tabId);
+      const li = createAssetItem(asset, expandedPaths, null, null, false, state, refresh, tabId);
       list.appendChild(li);
     });
     root.appendChild(list);
-  } else {
-    const empty = document.createElement('p');
-    empty.className = 'eds-empty';
-    empty.textContent = 'No block assets found in network responses.';
-    root.appendChild(empty);
   }
   
   // スクロール位置を復元（DOM更新を待つ）
@@ -166,16 +384,8 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
   title.textContent = asset.path;
   title.style.cssText = 'font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
   
-  // Markupの場合のみ、前/次のブロック切り替えボタンを追加
-  if (asset.isMarkup) {
-    const navWrapper = createMarkupNavigation(blocksWithSameName, currentBlockIndex, hasMultipleBlocks, state, refresh, tabId);
     leftSection.appendChild(toggle);
     leftSection.appendChild(title);
-    leftSection.appendChild(navWrapper);
-  } else {
-    leftSection.appendChild(toggle);
-    leftSection.appendChild(title);
-  }
   
   const rightSection = document.createElement('div');
   rightSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 12px;';

@@ -2,8 +2,9 @@
  * ページ分析のメインロジック
  */
 import { state } from './state.js';
-import { resolveConfig, parseSSRDocument } from './utils/config.js';
+import { resolveConfig, parseSSRDocuments } from './utils/config.js';
 import { collectBlockResourceNames, collectIconNames } from './collectors/resources.js';
+import { collectHtmlDocuments } from './collectors/html-documents.js';
 import { collectJsonFiles } from './collectors/json.js';
 import { collectScriptFiles } from './collectors/scripts.js';
 import { detectSections } from './detectors/sections.js';
@@ -22,14 +23,39 @@ export async function analyzePage() {
   if (!mainLive) {
     throw new Error('EDS Inspector: <main> element not found.');
   }
-  const ssrDoc = (state.ssrDocument = (await parseSSRDocument()) || document);
-  const mainSSR = ssrDoc.querySelector('main') || document.querySelector('main');
-  const blockResources = collectBlockResourceNames();
-  const iconResources = collectIconNames();
+  
+  try {
+    // HTMLドキュメントを収集
+    const htmlDocuments = await collectHtmlDocuments();
+    console.log('[EDS Inspector] Collected HTML documents:', htmlDocuments.size);
+    
+    // 生のHTML文字列を保存
+    state.htmlDocuments = htmlDocuments;
+    
+    // SSRドキュメントをパース
+    state.ssrDocuments = await parseSSRDocuments(htmlDocuments);
+    state.mainDocumentUrl = window.location.href.split('?')[0];
+    console.log('[EDS Inspector] Parsed SSR documents:', state.ssrDocuments.size);
+    
+    // メインSSRドキュメントを取得
+    const mainSSRDoc = state.ssrDocuments.get(state.mainDocumentUrl) || document;
+    const mainSSR = mainSSRDoc.querySelector('main') || document.querySelector('main');
+    
+    if (!mainSSR) {
+      console.warn('[EDS Inspector] Main SSR element not found, using document');
+    }
+    
+    const blockResources = collectBlockResourceNames();
+    const iconResources = collectIconNames();
 
-  state.sections = detectSections(mainSSR, mainLive);
-  state.blocks = detectBlocks(mainSSR, mainLive, blockResources);
-  state.icons = await detectIcons(mainSSR, mainLive, iconResources);
+    // 複数のSSRドキュメントを考慮して検出
+    state.sections = detectSections(state.ssrDocuments, mainSSR, mainLive);
+    state.blocks = detectBlocks(state.ssrDocuments, mainSSR, mainLive, blockResources);
+    state.icons = await detectIcons(state.ssrDocuments, mainSSR, mainLive, iconResources);
+  } catch (err) {
+    console.error('[EDS Inspector] Error in analyzePage:', err);
+    throw err;
+  }
   
   // JSONファイルを収集
   console.log('[EDS Inspector Content] About to collect JSON files...');
@@ -48,8 +74,8 @@ export async function analyzePage() {
   await loadCodeAndMedia();
   
   buildOverlays();
-  // オーバーレイを構築した直後に位置を更新（同期的に）
-  refreshOverlayPositions();
+  // オーバーレイを構築した直後に位置を更新
+  await refreshOverlayPositions();
   
   // 解析済みフラグを設定
   state.isAnalyzed = true;

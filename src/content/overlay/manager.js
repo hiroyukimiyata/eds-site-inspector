@@ -37,15 +37,68 @@ export function ensureOverlayRootSizing(root) {
 }
 
 /**
+ * ポップアップまたはDevToolsが存在するかチェック
+ * ポップアップまたはDevToolsが開いている場合のみtrueを返す
+ */
+let lastExtensionCheck = 0;
+let extensionAvailable = false;
+const EXTENSION_CHECK_INTERVAL = 1000; // 1秒ごとにチェック
+
+export async function checkExtensionAvailable() {
+  const now = Date.now();
+  // キャッシュされた結果を使用（1秒以内）
+  if (now - lastExtensionCheck < EXTENSION_CHECK_INTERVAL) {
+    return extensionAvailable;
+  }
+  
+  lastExtensionCheck = now;
+  
+  try {
+    // ポップアップまたはDevToolsが開いているかどうかを確認
+    // chrome.runtime.sendMessageでメッセージを送信して、レスポンスがあるかどうかで確認
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'ping' }, (response) => {
+        // エラーが発生した場合（ポップアップもDevToolsも存在しない場合）
+        if (chrome.runtime.lastError) {
+          resolve(false);
+        } else {
+          // レスポンスがある場合は、ポップアップまたはDevToolsが開いている
+          resolve(true);
+        }
+      });
+      // タイムアウト（200ms以内にレスポンスがない場合は存在しないと判断）
+      setTimeout(() => resolve(false), 200);
+    });
+    
+    extensionAvailable = response;
+    return extensionAvailable;
+  } catch (e) {
+    // エラーの場合は存在しないと判断
+    extensionAvailable = false;
+    return false;
+  }
+}
+
+/**
  * オーバーレイの位置を更新
  */
-export function refreshOverlayPositions() {
+export async function refreshOverlayPositions() {
   const root = document.getElementById(UI_IDS.overlayRoot);
   if (!root) {
     console.warn('[EDS Inspector] Overlay root not found');
     return;
   }
   ensureOverlayRootSizing(root);
+  
+  // ポップアップまたはDevToolsが開いているかどうかを確認
+  const extensionAvailable = await checkExtensionAvailable();
+  if (!extensionAvailable) {
+    // ポップアップもDevToolsも閉じている場合は、オーバーレイを非表示にする
+    console.log('[EDS Inspector] Extension not available, hiding overlays');
+    root.style.display = 'none';
+    state.overlaysVisible = false;
+    return;
+  }
   
   // オーバーレイ全体が非表示の場合は、ルート要素を非表示にする
   if (!state.overlaysVisible) {
@@ -119,9 +172,9 @@ export function refreshOverlayPositions() {
 /**
  * オーバーレイの表示/非表示を切り替え
  */
-export function toggleOverlays() {
+export async function toggleOverlays() {
   state.overlaysVisible = !state.overlaysVisible;
-  refreshOverlayPositions();
+  await refreshOverlayPositions();
   console.log('[EDS Inspector] Overlays toggled, visible:', state.overlaysVisible);
 }
 
@@ -147,9 +200,9 @@ export function destroy() {
  * グローバルリスナーをアタッチ
  */
 export function attachGlobalListeners() {
-  window.addEventListener('scroll', refreshOverlayPositions, true);
-  window.addEventListener('resize', refreshOverlayPositions, true);
-  const resizeObserver = new ResizeObserver(() => refreshOverlayPositions());
+  window.addEventListener('scroll', () => { refreshOverlayPositions().catch(console.error); }, true);
+  window.addEventListener('resize', () => { refreshOverlayPositions().catch(console.error); }, true);
+  const resizeObserver = new ResizeObserver(() => { refreshOverlayPositions().catch(console.error); });
   resizeObserver.observe(document.documentElement);
 }
 

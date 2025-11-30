@@ -3,7 +3,7 @@
   "name": "EDS Site Inspector",
   "version": "0.1.0",
   "description": "Analyze Edge Delivery Services pages to visualize sections, blocks, and associated code/media sources.",
-  "permissions": ["scripting", "activeTab", "storage"],
+  "permissions": ["scripting", "activeTab", "storage", "tabs"],
   "host_permissions": ["<all_urls>"],
   "devtools_page": "devtools.html",
   "action": {

@@ -57,7 +57,8 @@ export function serializeState() {
         tagName: rep.tagName,
         classes: rep.classes,
         category: rep.category || 'block',
-        count: group.blocks.length // 同じ名前のブロック数
+        count: group.blocks.length, // 同じ名前のブロック数
+        sourceDocumentUrl: rep.sourceDocumentUrl || null // どのドキュメントから来たか
       };
     }),
     icons: state.icons.map((icon) => ({

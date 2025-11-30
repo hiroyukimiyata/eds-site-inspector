@@ -128,12 +128,21 @@ function setupPageNavigationDetection() {
  * Handle page navigation
  */
 async function handlePageNavigation() {
-  // Check if DevTools panel is open
-  // Only reload if panel is open
+  // オーバーレイが表示されている場合（ポップアップまたはDevToolsが開いている）のみリロード
   try {
-    // Check if messages from panel are possible
-    // Actually, there's no way to directly check if panel is open,
-    // so always attempt reload (will be ignored if panel is not open)
+    // ポップアップまたはDevToolsが開いているかどうかを確認
+    const extensionAvailable = await checkExtensionAvailable();
+    
+    if (!extensionAvailable) {
+      console.log('[EDS Inspector Content] Extension not available, skipping auto-reload');
+      return;
+    }
+    
+    // オーバーレイが表示されている場合のみリロード
+    if (!state.overlaysVisible) {
+      console.log('[EDS Inspector Content] Overlays not visible, skipping auto-reload');
+      return;
+    }
     
     // Reset state
     state.isAnalyzed = false;

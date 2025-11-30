@@ -4,13 +4,14 @@
 import { computeElementPath, findElementByPath } from '../utils/dom.js';
 
 /**
- * セクションを検出
+ * セクションを検出（複数のSSRドキュメントに対応）
  */
-export function detectSections(mainSSR, mainLive) {
+export function detectSections(ssrDocuments, mainSSR, mainLive) {
   const sections = [];
   const seenElements = new Set();
   
   console.log('[EDS Inspector] Detecting sections...');
+  console.log('[EDS Inspector] SSR documents count:', ssrDocuments.size);
   console.log('[EDS Inspector] SSR main children:', Array.from(mainSSR.children).map(c => c.tagName));
   console.log('[EDS Inspector] Live main children:', Array.from(mainLive.children).map(c => c.tagName));
   
