@@ -62,6 +62,7 @@ async function build() {
   copyFile(path.resolve(__dirname, '../src/popup.html'), path.join(outdir, 'popup.html'));
   copyDir(path.resolve(__dirname, '../public'), outdir);
   copyDir(path.resolve(__dirname, '../src/panel/data'), path.join(outdir, 'panel/data'));
+  copyDir(path.resolve(__dirname, '../src/icons'), path.join(outdir, 'icons'));
 
   console.log('Build complete. Load the dist/ directory as an unpacked extension.');
 }
