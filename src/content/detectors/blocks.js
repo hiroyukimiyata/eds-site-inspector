@@ -172,6 +172,25 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
               const path = computeElementPath(liveElement, mainLive);
               // SSR要素を見つける
               ssrElement = findElementByPath(mainSSR, path);
+              
+              // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
+              // ブロッククラスを持たない場合は、親要素を探してブロッククラスを持つ要素を見つける
+              if (ssrElement && blockName !== 'header' && blockName !== 'footer') {
+                let current = ssrElement;
+                let foundBlockElement = null;
+                // 親要素を遡ってブロッククラスを持つ要素を探す
+                while (current && current !== mainSSR) {
+                  const classList = Array.from(current.classList || []);
+                  if (classList.includes(blockName)) {
+                    foundBlockElement = current;
+                    break;
+                  }
+                  current = current.parentElement;
+                }
+                if (foundBlockElement) {
+                  ssrElement = foundBlockElement;
+                }
+              }
             }
             
             // パスベースで見つからない場合、ブロック名で検索を試す
@@ -339,6 +358,25 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
               // パスベースで検出を試す
               const path = computeElementPath(liveElement, mainLive);
               ssrElement = findElementByPath(mainSSR, path);
+              
+              // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
+              // ブロッククラスを持たない場合は、親要素を探してブロッククラスを持つ要素を見つける
+              if (ssrElement && blockName !== 'header' && blockName !== 'footer') {
+                let current = ssrElement;
+                let foundBlockElement = null;
+                // 親要素を遡ってブロッククラスを持つ要素を探す
+                while (current && current !== mainSSR) {
+                  const classList = Array.from(current.classList || []);
+                  if (classList.includes(blockName)) {
+                    foundBlockElement = current;
+                    break;
+                  }
+                  current = current.parentElement;
+                }
+                if (foundBlockElement) {
+                  ssrElement = foundBlockElement;
+                }
+              }
             }
             
             // SSRマークアップから対応する要素を探す（main要素内を先に検索）

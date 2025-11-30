@@ -867,6 +867,21 @@
               if (mainLive.contains(liveElement)) {
                 const path = computeElementPath(liveElement, mainLive);
                 ssrElement = findElementByPath(mainSSR, path);
+                if (ssrElement && blockName !== "header" && blockName !== "footer") {
+                  let current = ssrElement;
+                  let foundBlockElement = null;
+                  while (current && current !== mainSSR) {
+                    const classList = Array.from(current.classList || []);
+                    if (classList.includes(blockName)) {
+                      foundBlockElement = current;
+                      break;
+                    }
+                    current = current.parentElement;
+                  }
+                  if (foundBlockElement) {
+                    ssrElement = foundBlockElement;
+                  }
+                }
               }
               if (!ssrElement) {
                 let allLiveElements = [];
@@ -985,6 +1000,21 @@
               if (mainLive.contains(liveElement)) {
                 const path = computeElementPath(liveElement, mainLive);
                 ssrElement = findElementByPath(mainSSR, path);
+                if (ssrElement && blockName !== "header" && blockName !== "footer") {
+                  let current = ssrElement;
+                  let foundBlockElement = null;
+                  while (current && current !== mainSSR) {
+                    const classList2 = Array.from(current.classList || []);
+                    if (classList2.includes(blockName)) {
+                      foundBlockElement = current;
+                      break;
+                    }
+                    current = current.parentElement;
+                  }
+                  if (foundBlockElement) {
+                    ssrElement = foundBlockElement;
+                  }
+                }
               }
               if (!ssrElement) {
                 const ssrElementsInMain = mainSSR.querySelectorAll(`.${escapeCSS(blockName)}`);
