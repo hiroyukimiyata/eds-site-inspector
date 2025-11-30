@@ -6,9 +6,9 @@ import { processCode } from '../utils/code-processor.js';
 import { createCopyButton as createCopyButtonUtil, createSearchUI } from '../utils/file-utils.js';
 
 /**
- * ブロック詳細をレンダリング
+ * ブロック詳細をレンダリング（開閉状態を保持）
  */
-export async function renderBlockDetail(state, detail, refresh, tabId) {
+async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId, preservedExpandedPaths) {
   const root = document.querySelector('[data-tab-panel="blocks"]');
   if (!detail || !detail.block) {
     return;
@@ -18,15 +18,8 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
   const scrollContainer = root.closest('main') || root.parentElement;
   const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
   
-  // 現在の開閉状態を保存
-  const expandedPaths = new Set();
-  const existingItems = root.querySelectorAll('.eds-asset-item.is-expanded');
-  existingItems.forEach(item => {
-    const path = item.querySelector('.eds-file-card__path')?.textContent;
-    if (path) {
-      expandedPaths.add(path);
-    }
-  });
+  // 保存された開閉状態を使用（なければ空のSet）
+  const expandedPaths = preservedExpandedPaths || new Set();
   
   // 一覧に戻るボタンを作成
   const backButton = document.createElement('button');
@@ -65,7 +58,7 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
   const markupContent = detail.markup || 'No markup captured for this block.';
   if (markupContent !== 'No markup captured for this block.') {
     allAssets.push({
-      path: 'Markup',
+      path: 'Markup (CSR)',
       type: 'html',
       content: markupContent,
       isMarkup: true
@@ -80,23 +73,35 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
     // 全て開く/閉じるボタン
     const controls = document.createElement('div');
     controls.className = 'eds-asset-controls';
-    controls.style.cssText = 'display: flex; gap: 8px; margin-bottom: 16px;';
+    controls.style.cssText = 'display: flex; gap: 4px; margin-bottom: 8px;';
     
     const expandAllBtn = document.createElement('button');
     expandAllBtn.className = 'eds-button';
     expandAllBtn.textContent = 'Expand All';
+    expandAllBtn.style.cssText = 'padding: 4px 8px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text); cursor: pointer;';
     expandAllBtn.addEventListener('click', () => {
-      document.querySelectorAll('.eds-asset-item').forEach(item => {
-        item.classList.add('is-expanded');
+      root.querySelectorAll('.eds-asset-item').forEach(item => {
+        const content = item.querySelector('.eds-asset-content');
+        const toggle = item.querySelector('.eds-asset-toggle');
+        if (content && toggle) {
+          content.style.display = 'block';
+          toggle.textContent = '▼';
+        }
       });
     });
     
     const collapseAllBtn = document.createElement('button');
     collapseAllBtn.className = 'eds-button';
     collapseAllBtn.textContent = 'Collapse All';
+    collapseAllBtn.style.cssText = 'padding: 4px 8px; font-size: 11px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-muted); color: var(--text); cursor: pointer;';
     collapseAllBtn.addEventListener('click', () => {
-      document.querySelectorAll('.eds-asset-item').forEach(item => {
-        item.classList.remove('is-expanded');
+      root.querySelectorAll('.eds-asset-item').forEach(item => {
+        const content = item.querySelector('.eds-asset-content');
+        const toggle = item.querySelector('.eds-asset-toggle');
+        if (content && toggle) {
+          content.style.display = 'none';
+          toggle.textContent = '▶';
+        }
       });
     });
     
@@ -127,6 +132,13 @@ export async function renderBlockDetail(state, detail, refresh, tabId) {
       });
     });
   }
+}
+
+/**
+ * ブロック詳細をレンダリング
+ */
+export async function renderBlockDetail(state, detail, refresh, tabId) {
+  await renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId, null);
 }
 
 /**
@@ -212,8 +224,10 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
     toggle.textContent = '▶';
   }
   
+  // 検索キーを生成（asset.pathをキーにする）
+  const searchKey = `block-${asset.path}`;
   // 検索UIを追加（content要素がスクロール可能なコンテナとして機能する）
-  const searchUI = createSearchUI(content, rawContent);
+  const searchUI = createSearchUI(content, rawContent, searchKey);
   
   const codeContainer = document.createElement('div');
   codeContainer.style.cssText = 'padding: 16px;';
@@ -261,6 +275,8 @@ function createMarkupNavigation(blocksWithSameName, currentBlockIndex, hasMultip
   navWrapper.className = 'eds-markup-nav';
   navWrapper.style.cssText = 'display: flex; align-items: center; gap: 4px;';
   
+  const root = document.querySelector('[data-tab-panel="blocks"]');
+  
   const prevBtn = document.createElement('button');
   prevBtn.className = 'eds-nav-button';
   prevBtn.innerHTML = '◀';
@@ -270,12 +286,27 @@ function createMarkupNavigation(blocksWithSameName, currentBlockIndex, hasMultip
   prevBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (currentBlockIndex > 0) {
+      // 現在の開閉状態を保存
+      const currentExpandedPaths = new Set();
+      const currentItems = root.querySelectorAll('.eds-asset-item');
+      currentItems.forEach(item => {
+        const content = item.querySelector('.eds-asset-content');
+        if (content && content.style.display !== 'none') {
+          const path = item.querySelector('.eds-file-title')?.textContent;
+          if (path) {
+            currentExpandedPaths.add(path);
+          }
+        }
+      });
+      
       const prevBlock = blocksWithSameName[currentBlockIndex - 1];
       await sendToContent(tabId, 'select-block', { id: prevBlock.id });
       await sendToContent(tabId, 'scroll-to-block', { id: prevBlock.id });
       await sendToContent(tabId, 'highlight', { id: prevBlock.id });
       const prevDetail = await sendToContent(tabId, 'get-block-detail', { id: prevBlock.id });
-      renderBlockDetail(state, prevDetail, refresh, tabId);
+      
+      // 開閉状態を保持してレンダリング
+      await renderBlockDetailWithExpandedPaths(state, prevDetail, refresh, tabId, currentExpandedPaths);
     }
   });
   
@@ -293,12 +324,27 @@ function createMarkupNavigation(blocksWithSameName, currentBlockIndex, hasMultip
   nextBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (currentBlockIndex < blocksWithSameName.length - 1) {
+      // 現在の開閉状態を保存
+      const currentExpandedPaths = new Set();
+      const currentItems = root.querySelectorAll('.eds-asset-item');
+      currentItems.forEach(item => {
+        const content = item.querySelector('.eds-asset-content');
+        if (content && content.style.display !== 'none') {
+          const path = item.querySelector('.eds-file-title')?.textContent;
+          if (path) {
+            currentExpandedPaths.add(path);
+          }
+        }
+      });
+      
       const nextBlock = blocksWithSameName[currentBlockIndex + 1];
       await sendToContent(tabId, 'select-block', { id: nextBlock.id });
       await sendToContent(tabId, 'scroll-to-block', { id: nextBlock.id });
       await sendToContent(tabId, 'highlight', { id: nextBlock.id });
       const nextDetail = await sendToContent(tabId, 'get-block-detail', { id: nextBlock.id });
-      renderBlockDetail(state, nextDetail, refresh, tabId);
+      
+      // 開閉状態を保持してレンダリング
+      await renderBlockDetailWithExpandedPaths(state, nextDetail, refresh, tabId, currentExpandedPaths);
     }
   });
   

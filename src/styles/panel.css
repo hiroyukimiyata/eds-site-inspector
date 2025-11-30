@@ -52,6 +52,21 @@ html, body {
   border-color: transparent;
 }
 
+/* Controlタブの特別なスタイル（操作用） - アクティブ時のみ */
+.eds-tabs button.eds-tab-control.active {
+  background: linear-gradient(120deg, #3b82f6, #2563eb);
+  color: white;
+  border-color: transparent;
+}
+
+/* セパレーター */
+.eds-tabs-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+  opacity: 0.5;
+}
+
 main {
   flex: 1;
   padding: 12px 14px;

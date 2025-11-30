@@ -2,6 +2,32 @@
  * ファイル表示用の共通ユーティリティ
  */
 
+// 検索ワードのストレージキー
+const SEARCH_STORAGE_PREFIX = 'eds-search-';
+
+/**
+ * 検索ワードを保存
+ */
+function saveSearchQuery(key, query) {
+  try {
+    sessionStorage.setItem(`${SEARCH_STORAGE_PREFIX}${key}`, query);
+  } catch (err) {
+    console.warn('[EDS Inspector Panel] Failed to save search query:', err);
+  }
+}
+
+/**
+ * 検索ワードを取得
+ */
+function getSearchQuery(key) {
+  try {
+    return sessionStorage.getItem(`${SEARCH_STORAGE_PREFIX}${key}`) || '';
+  } catch (err) {
+    console.warn('[EDS Inspector Panel] Failed to get search query:', err);
+    return '';
+  }
+}
+
 /**
  * クリップボードにコピー（DevTools対応）
  */
@@ -122,7 +148,7 @@ function showCopyError(button) {
 /**
  * 検索UIを作成
  */
-export function createSearchUI(contentElement, rawText) {
+export function createSearchUI(contentElement, rawText, searchKey = null) {
   const searchContainer = document.createElement('div');
   searchContainer.className = 'eds-search-container';
   searchContainer.style.cssText = 'display: flex; flex-direction: column; gap: 0; background: var(--bg-muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;';
@@ -135,6 +161,14 @@ export function createSearchUI(contentElement, rawText) {
   searchInput.placeholder = 'Search in file... (Ctrl+F / Cmd+F)';
   searchInput.className = 'eds-search-input';
   searchInput.style.cssText = 'flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;';
+  
+  // 保存された検索ワードを復元
+  if (searchKey) {
+    const savedQuery = getSearchQuery(searchKey);
+    if (savedQuery) {
+      searchInput.value = savedQuery;
+    }
+  }
   
   const searchInfo = document.createElement('span');
   searchInfo.className = 'eds-search-info';
@@ -334,6 +368,10 @@ export function createSearchUI(contentElement, rawText) {
   
   searchInput.addEventListener('input', (e) => {
     const searchText = e.target.value;
+    // 検索ワードを保存
+    if (searchKey) {
+      saveSearchQuery(searchKey, searchText);
+    }
     highlightMatches(searchText);
   });
   
@@ -388,6 +426,10 @@ export function createSearchUI(contentElement, rawText) {
     highlightMatches('');
     searchInput.value = '';
     originalCodeHTML = null;
+    // 検索ワードをクリア
+    if (searchKey) {
+      saveSearchQuery(searchKey, '');
+    }
   };
   
   closeBtn.addEventListener('click', clearSearch);
@@ -419,6 +461,18 @@ export function createSearchUI(contentElement, rawText) {
   searchBar.appendChild(nextBtn);
   searchBar.appendChild(closeBtn);
   searchContainer.appendChild(searchBar);
+  
+  // 保存された検索ワードがある場合は、初期表示時に検索を実行
+  if (searchKey) {
+    const savedQuery = getSearchQuery(searchKey);
+    if (savedQuery) {
+      // DOMが構築された後に検索を実行
+      setTimeout(() => {
+        searchInput.value = savedQuery;
+        highlightMatches(savedQuery);
+      }, 100);
+    }
+  }
   
   return searchContainer;
 }

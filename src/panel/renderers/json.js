@@ -144,7 +144,9 @@ export function renderJson(state) {
             rightSection.appendChild(copyBtn);
           }
           
-          const searchUI = createSearchUI(content, jsonString);
+          // 検索キーを生成（URLをキーにする）
+          const searchKey = `json-${jsonFile.url}`;
+          const searchUI = createSearchUI(content, jsonString, searchKey);
           
           const codeContainer = document.createElement('div');
           codeContainer.style.cssText = 'padding: 16px;';
@@ -201,7 +203,9 @@ export function renderJson(state) {
             rightSection.appendChild(copyBtn);
           }
           
-          const searchUI = createSearchUI(content, jsonString);
+          // 検索キーを生成（URLをキーにする）
+          const searchKey = `json-${jsonFile.url}`;
+          const searchUI = createSearchUI(content, jsonString, searchKey);
           
           const codeContainer = document.createElement('div');
           codeContainer.style.cssText = 'padding: 16px;';

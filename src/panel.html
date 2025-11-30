@@ -8,13 +8,14 @@
   <body class="eds-panel">
     <div class="eds-panel__container">
       <div class="eds-tabs" role="tablist">
-        <button data-tab="control" class="active" role="tab">Control</button>
+        <button data-tab="control" class="active eds-tab-control" role="tab">Control</button>
+        <div class="eds-tabs-separator"></div>
         <button data-tab="blocks" role="tab">Blocks</button>
-        <button data-tab="icons" role="tab">Icons</button>
         <button data-tab="code" role="tab">Scripts</button>
-        <button data-tab="media" role="tab">Media</button>
         <button data-tab="json" role="tab">JSON</button>
-        <button data-tab="docs" role="tab">Docs</button>
+        <button data-tab="media" role="tab">Media</button>
+        <button data-tab="icons" role="tab">Icons</button>
+        <button data-tab="docs" role="tab">Docs (SSR)</button>
       </div>
       <main>
         <section data-tab-panel="control"></section>

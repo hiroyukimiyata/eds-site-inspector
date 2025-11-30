@@ -141,7 +141,9 @@ export function renderScripts(state) {
             rightSection.appendChild(copyBtn);
           }
           
-          const searchUI = createSearchUI(content, codeText);
+          // 検索キーを生成（URLをキーにする）
+          const searchKey = `script-${scriptFile.url}`;
+          const searchUI = createSearchUI(content, codeText, searchKey);
           
           const codeContainer = document.createElement('div');
           codeContainer.style.cssText = 'padding: 16px;';
@@ -196,7 +198,9 @@ export function renderScripts(state) {
             rightSection.appendChild(copyBtn);
           }
           
-          const searchUI = createSearchUI(content, codeText);
+          // 検索キーを生成（URLをキーにする）
+          const searchKey = `script-${scriptFile.url}`;
+          const searchUI = createSearchUI(content, codeText, searchKey);
           
           const codeContainer = document.createElement('div');
           codeContainer.style.cssText = 'padding: 16px;';
