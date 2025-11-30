@@ -273,7 +273,7 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
           const matchText = text.substring(index, index + length);
           const highlight = document.createElement('mark');
           highlight.className = 'eds-search-highlight';
-          highlight.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 0;';
+          highlight.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 2px; border-radius: 2px; font-weight: 500;';
           highlight.textContent = matchText;
           parts.push(highlight);
           lastIndex = index + length;
@@ -346,9 +346,9 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
       // 現在のマッチを強調
       markElements.forEach((el, i) => {
         if (i === index) {
-          el.style.cssText = 'background: #f59e0b; color: #0b1220; padding: 2px 0; font-weight: 600;';
+          el.style.cssText = 'background: #f59e0b; color: #0b1220; padding: 2px 2px; border-radius: 2px; font-weight: 600; box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3);';
         } else {
-          el.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 0;';
+          el.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 2px; border-radius: 2px; font-weight: 500;';
         }
       });
     }
