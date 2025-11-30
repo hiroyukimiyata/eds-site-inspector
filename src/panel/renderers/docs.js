@@ -38,8 +38,8 @@ function renderDocsContent(container, content, mode) {
   const codeContainer = document.createElement('div');
   codeContainer.style.cssText = 'padding: 16px;';
   
-  const sourcePre = document.createElement('pre');
-  sourcePre.className = 'eds-code';
+      const sourcePre = document.createElement('pre');
+      sourcePre.className = 'eds-code';
   sourcePre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
   
   const sourceCode = document.createElement('code');
@@ -175,49 +175,49 @@ export async function renderDocs(tabId) {
     let content;
     
     if (currentMode === 'markdown') {
-      // 現在のタブのURLを取得
-      const tab = await chrome.tabs.get(tabId);
-      if (!tab || !tab.url) {
+    // 現在のタブのURLを取得
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab || !tab.url) {
         contentArea.innerHTML = '<p class="eds-empty">Could not determine current page URL.</p>';
-        return;
-      }
-      
-      const currentUrl = tab.url;
-      const markdownUrl = getMarkdownUrl(currentUrl);
-      
-      if (!markdownUrl) {
+      return;
+    }
+    
+    const currentUrl = tab.url;
+    const markdownUrl = getMarkdownUrl(currentUrl);
+    
+    if (!markdownUrl) {
         contentArea.innerHTML = '<p class="eds-empty">Could not construct markdown URL.</p>';
+      return;
+    }
+    
+    // キャッシュをチェック（同じURLで5分以内ならキャッシュを使用）
+    const now = Date.now();
+    const cacheAge = markdownCache.timestamp ? (now - markdownCache.timestamp) : Infinity;
+    const useCache = markdownCache.url === markdownUrl && cacheAge < 5 * 60 * 1000;
+    
+    if (useCache && markdownCache.content) {
+        content = markdownCache.content;
+      console.log('[EDS Inspector Panel] Using cached markdown');
+    } else {
+      // Markdownを取得
+      const response = await fetch(markdownUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+            contentArea.innerHTML = `<p class="eds-empty">Markdown file not found at:<br><code style="word-break: break-all; background: var(--bg-muted); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 8px;">${markdownUrl}</code></p>`;
+        } else {
+            contentArea.innerHTML = `<p class="eds-empty">Failed to load markdown: ${response.status} ${response.statusText}</p>`;
+        }
         return;
       }
       
-      // キャッシュをチェック（同じURLで5分以内ならキャッシュを使用）
-      const now = Date.now();
-      const cacheAge = markdownCache.timestamp ? (now - markdownCache.timestamp) : Infinity;
-      const useCache = markdownCache.url === markdownUrl && cacheAge < 5 * 60 * 1000;
-      
-      if (useCache && markdownCache.content) {
-        content = markdownCache.content;
-        console.log('[EDS Inspector Panel] Using cached markdown');
-      } else {
-        // Markdownを取得
-        const response = await fetch(markdownUrl);
-        if (!response.ok) {
-          if (response.status === 404) {
-            contentArea.innerHTML = `<p class="eds-empty">Markdown file not found at:<br><code style="word-break: break-all; background: var(--bg-muted); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 8px;">${markdownUrl}</code></p>`;
-          } else {
-            contentArea.innerHTML = `<p class="eds-empty">Failed to load markdown: ${response.status} ${response.statusText}</p>`;
-          }
-          return;
-        }
-        
         content = await response.text();
-        // キャッシュに保存
-        markdownCache = {
-          url: markdownUrl,
+      // キャッシュに保存
+      markdownCache = {
+        url: markdownUrl,
           content: content,
-          timestamp: now
-        };
-      }
+        timestamp: now
+      };
+    }
     } else {
       // Markupモード: SSRされたHTMLを取得
       content = await getSSRMarkup(tabId);

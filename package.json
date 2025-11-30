@@ -18,7 +18,9 @@
   "license": "ISC",
   "devDependencies": {
     "esbuild": "^0.24.0",
-    "nodemon": "^3.1.9"
+    "js-beautify": "^1.15.4",
+    "nodemon": "^3.1.9",
+    "prettier": "^3.7.3"
   },
   "dependencies": {
     "marked": "^17.0.1"

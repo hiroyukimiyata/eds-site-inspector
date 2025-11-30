@@ -25,8 +25,8 @@ export function collectJsonFiles() {
   // すべてのリソースをチェック
   resources.forEach((entry) => {
     const urlString = entry.name;
-    if (!urlString || typeof urlString !== 'string') return;
-    
+      if (!urlString || typeof urlString !== 'string') return;
+      
     // .jsonを含むかチェック
     if (!urlString.includes('.json')) return;
     
@@ -96,7 +96,7 @@ export function collectJsonFiles() {
   if (collectedFiles.length > 0) {
     collectedFiles.forEach(f => {
       console.log('[EDS Inspector JSON] File:', f.filename, f.url);
-    });
+      });
   } else {
     console.error('[EDS Inspector JSON] ❌ NO JSON FILES FOUND!');
     console.error('[EDS Inspector JSON] All .json candidates:', jsonCandidates.map(r => r.name));

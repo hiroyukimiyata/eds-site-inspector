@@ -203,6 +203,7 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   let matches = [];
   let currentMatchIndex = -1;
   let originalCodeHTML = null;
+  let originalPlainText = rawText; // 元のプレーンテキストを保持
   
   const highlightMatches = (searchText) => {
     const codeElement = contentElement.querySelector('code');
@@ -218,6 +219,14 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
       codeElement.innerHTML = originalCodeHTML;
     }
     
+    // ハイライト済みHTMLからプレーンテキストを抽出（HTMLタグを除去）
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = codeElement.innerHTML;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // rawTextが利用可能な場合はそれを使用、そうでなければ抽出したテキストを使用
+    const textToSearch = originalPlainText || plainText;
+    
     matches = [];
     currentMatchIndex = -1;
     
@@ -228,74 +237,109 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
       return;
     }
     
-    // code要素内のテキストを検索
-    const walker = document.createTreeWalker(
-      codeElement,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
-    
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      textNodes.push(node);
+    // プレーンテキストから検索マッチを探す
+    const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const matchIndices = [];
+    let match;
+    while ((match = regex.exec(textToSearch)) !== null) {
+      matchIndices.push({
+        index: match.index,
+        length: match[0].length
+      });
     }
     
-    const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    
-    textNodes.forEach(textNode => {
-      const text = textNode.textContent;
-      const matchIndices = [];
-      let match;
-      const tempRegex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-      while ((match = tempRegex.exec(text)) !== null) {
-        matchIndices.push({
-          index: match.index,
-          length: match[0].length
-        });
-        matches.push({
-          node: textNode,
-          index: match.index,
-          length: match[0].length
-        });
+    // マッチが見つかった場合、code要素内のテキストノードを検索してハイライト
+    if (matchIndices.length > 0) {
+      // code要素内のテキストノードを取得
+      const walker = document.createTreeWalker(
+        codeElement,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+      
+      const textNodes = [];
+      let node;
+      while (node = walker.nextNode()) {
+        textNodes.push(node);
       }
       
-      if (matchIndices.length > 0) {
-        // テキストノードを分割してハイライト
-        const parent = textNode.parentNode;
-        const parts = [];
-        let lastIndex = 0;
+      // テキストノードの累積オフセットを計算
+      let cumulativeOffset = 0;
+      let matchIndex = 0;
+      
+      textNodes.forEach(textNode => {
+        const text = textNode.textContent;
+        const nodeStart = cumulativeOffset;
+        const nodeEnd = cumulativeOffset + text.length;
         
-        matchIndices.forEach(({ index, length }) => {
-          if (index > lastIndex) {
-            parts.push(text.substring(lastIndex, index));
+        // このノードに含まれるマッチを探す
+        const nodeMatches = [];
+        while (matchIndex < matchIndices.length) {
+          const match = matchIndices[matchIndex];
+          const matchStart = match.index;
+          const matchEnd = match.index + match.length;
+          
+          // マッチがこのノードの範囲内にあるか
+          if (matchStart >= nodeStart && matchStart < nodeEnd) {
+            const relativeStart = matchStart - nodeStart;
+            const relativeEnd = Math.min(matchEnd - nodeStart, text.length);
+            nodeMatches.push({
+              index: relativeStart,
+              length: relativeEnd - relativeStart
+            });
+            matches.push({
+              node: textNode,
+              index: relativeStart,
+              length: relativeEnd - relativeStart
+            });
+            matchIndex++;
+          } else if (matchStart >= nodeEnd) {
+            // このノードより後にあるので、次のノードへ
+            break;
+          } else {
+            matchIndex++;
           }
-          const matchText = text.substring(index, index + length);
-          const highlight = document.createElement('mark');
-          highlight.className = 'eds-search-highlight';
-          highlight.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 2px; border-radius: 2px; font-weight: 500;';
-          highlight.textContent = matchText;
-          parts.push(highlight);
-          lastIndex = index + length;
-        });
-        
-        if (lastIndex < text.length) {
-          parts.push(text.substring(lastIndex));
         }
         
-        // テキストノードを置き換え
-        const fragment = document.createDocumentFragment();
-        parts.forEach(part => {
-          if (typeof part === 'string') {
-            fragment.appendChild(document.createTextNode(part));
-          } else {
-            fragment.appendChild(part);
+        // マッチが見つかった場合、テキストノードを分割してハイライト
+        if (nodeMatches.length > 0) {
+          const parent = textNode.parentNode;
+          const parts = [];
+          let lastIndex = 0;
+          
+          nodeMatches.forEach(({ index, length }) => {
+            if (index > lastIndex) {
+              parts.push(text.substring(lastIndex, index));
+            }
+            const matchText = text.substring(index, index + length);
+            const highlight = document.createElement('mark');
+            highlight.className = 'eds-search-highlight';
+            highlight.style.cssText = 'background: #fbbf24; color: #0b1220; padding: 2px 2px; border-radius: 2px; font-weight: 500;';
+            highlight.textContent = matchText;
+            parts.push(highlight);
+            lastIndex = index + length;
+          });
+          
+          if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
           }
-        });
+          
+          // テキストノードを置き換え
+          const fragment = document.createDocumentFragment();
+          parts.forEach(part => {
+            if (typeof part === 'string') {
+              fragment.appendChild(document.createTextNode(part));
+            } else {
+              fragment.appendChild(part);
+            }
+          });
+          
+          parent.replaceChild(fragment, textNode);
+        }
         
-        parent.replaceChild(fragment, textNode);
-      }
-    });
+        cumulativeOffset = nodeEnd;
+      });
+    }
     
     if (matches.length > 0) {
       currentMatchIndex = 0;
@@ -425,7 +469,7 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   const clearSearch = () => {
     highlightMatches('');
     searchInput.value = '';
-    originalCodeHTML = null;
+    // originalCodeHTMLは保持（再検索時に使用するため）
     // 検索ワードをクリア
     if (searchKey) {
       saveSearchQuery(searchKey, '');

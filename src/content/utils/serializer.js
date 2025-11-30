@@ -82,6 +82,7 @@ export function serializeState() {
     })) : null,
     jsonFiles: state.jsonFiles ? Array.from(state.jsonFiles.values()) : null,
     scriptFiles: state.scriptFiles ? Array.from(state.scriptFiles.values()) : null,
+    isAnalyzed: state.isAnalyzed,
   };
 }
 

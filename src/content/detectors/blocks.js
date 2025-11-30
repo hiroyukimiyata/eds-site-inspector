@@ -38,6 +38,26 @@ export function detectBlocks(mainSSR, mainLive, blockResources) {
 }
 
 /**
+ * 要素がBlock要素のルート要素かどうかを判定
+ * （親要素に同じブロッククラスを持たない要素がルート要素）
+ */
+function isBlockRootElement(element, blockName) {
+  if (!element || !element.parentElement) return true;
+  
+  let parent = element.parentElement;
+  while (parent) {
+    const parentClasses = Array.from(parent.classList || []);
+    // 親要素が同じブロッククラスを持っている場合は、この要素はルート要素ではない
+    if (parentClasses.includes(blockName)) {
+      return false;
+    }
+    parent = parent.parentElement;
+  }
+  
+  return true;
+}
+
+/**
  * ネットワークリクエストからブロックを検出
  */
 function detectBlocksFromResources(mainLive, blockResources, blocks, seenElements) {
@@ -50,8 +70,6 @@ function detectBlocksFromResources(mainLive, blockResources, blocks, seenElement
       const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
       liveElements.forEach((liveElement) => {
         if (!(liveElement instanceof HTMLElement)) return;
-        // 既に検出済みの要素はスキップ
-        if (seenElements.has(liveElement)) return;
         
         // クラスリストにブロック名が含まれていることを確認
         const classList = Array.from(liveElement.classList);
@@ -60,7 +78,15 @@ function detectBlocksFromResources(mainLive, blockResources, blocks, seenElement
         // main要素の子孫要素であることを確認
         if (!mainLive.contains(liveElement)) return;
         
-        // ブロックのネストを防ぐ
+        // Block要素のルート要素かどうかを判定（親要素に同じブロッククラスを持たない要素のみ）
+        if (!isBlockRootElement(liveElement, blockName)) {
+          return; // ルート要素ではない場合はスキップ
+        }
+        
+        // 既に検出済みの要素はスキップ
+        if (seenElements.has(liveElement)) return;
+        
+        // ブロックのネストを防ぐ（他のブロック内にないことを確認）
         if (isInsideBlock(liveElement, mainLive, blockResources, blockName)) {
           return;
         }
@@ -68,12 +94,12 @@ function detectBlocksFromResources(mainLive, blockResources, blocks, seenElement
         seenElements.add(liveElement);
         blocks.push({
           id: `block-${blocks.length}`,
-          element: liveElement,
+          element: liveElement, // ルート要素を保存
           name: blockName,
           tagName: liveElement.tagName.toLowerCase(),
           classes: liveElement.className || '',
         });
-        console.log('[EDS Inspector] Detected block:', blockName, 'live element:', liveElement);
+        console.log('[EDS Inspector] Detected block:', blockName, 'root element:', liveElement);
       });
     } catch (e) {
       console.warn('[EDS Inspector] Error querying for block:', blockName, e);
@@ -119,8 +145,6 @@ function detectBlocksFromSSR(mainSSR, mainLive, blockResources, blocks, seenElem
       const liveElements = mainLive.querySelectorAll(`.${CSS.escape(blockName)}`);
       liveElements.forEach((liveElement) => {
         if (!(liveElement instanceof HTMLElement)) return;
-        // 既に検出済みの要素はスキップ
-        if (seenElements.has(liveElement)) return;
         
         // クラスリストにブロック名が含まれていることを確認
         const classList = Array.from(liveElement.classList);
@@ -129,7 +153,15 @@ function detectBlocksFromSSR(mainSSR, mainLive, blockResources, blocks, seenElem
         // main要素の子孫要素であることを確認
         if (!mainLive.contains(liveElement)) return;
         
-        // ブロックのネストを防ぐ
+        // Block要素のルート要素かどうかを判定（親要素に同じブロッククラスを持たない要素のみ）
+        if (!isBlockRootElement(liveElement, blockName)) {
+          return; // ルート要素ではない場合はスキップ
+        }
+        
+        // 既に検出済みの要素はスキップ
+        if (seenElements.has(liveElement)) return;
+        
+        // ブロックのネストを防ぐ（他のブロック内にないことを確認）
         if (isInsideBlock(liveElement, mainLive, blockResources, blockName)) {
           return;
         }
@@ -137,12 +169,12 @@ function detectBlocksFromSSR(mainSSR, mainLive, blockResources, blocks, seenElem
         seenElements.add(liveElement);
         blocks.push({
           id: `block-${blocks.length}`,
-          element: liveElement,
+          element: liveElement, // ルート要素を保存
           name: blockName,
           tagName: liveElement.tagName.toLowerCase(),
           classes: liveElement.className || '',
         });
-        console.log('[EDS Inspector] Detected block (from SSR, no network resource):', blockName);
+        console.log('[EDS Inspector] Detected block (from SSR, no network resource):', blockName, 'root element:', liveElement);
       });
     } catch (e) {
       console.warn('[EDS Inspector] Error querying for SSR block:', blockName, e);

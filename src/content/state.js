@@ -16,5 +16,6 @@ export const state = {
   icons: [], // アイコンの一覧
   jsonFiles: null, // JSONファイルの一覧
   scriptFiles: null, // JSファイルの一覧（/blocks/*.js以外）
+  isAnalyzed: false, // 解析済みかどうかのフラグ
 };
 

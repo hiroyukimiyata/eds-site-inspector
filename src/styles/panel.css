@@ -771,3 +771,55 @@ section[hidden] {
   color: var(--text);
   font-weight: 500;
 }
+
+/* Reloading indicator */
+.eds-reloading-indicator {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: linear-gradient(120deg, #0ea5e9, #6366f1);
+  padding: 12px 16px;
+  margin: -12px -14px 12px -14px;
+  border-bottom: 2px solid rgba(11, 18, 32, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.eds-reloading-indicator__content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #0b1220;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.eds-reloading-indicator__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(11, 18, 32, 0.2);
+  border-top-color: #0b1220;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.eds-reloading-indicator__text {
+  color: #0b1220;
+}

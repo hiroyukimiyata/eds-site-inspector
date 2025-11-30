@@ -104,6 +104,14 @@ export async function handleMessage(message, sender, sendResponse) {
     switch (message.type) {
       case 'init': {
         console.log('[EDS Inspector Content] Initializing...');
+        // 既に解析済みの場合はスキップ
+        if (state.isAnalyzed) {
+          console.log('[EDS Inspector Content] Already analyzed, skipping init()');
+          const serializedState = serializeState();
+          sendResponse(serializedState);
+          break;
+        }
+        
         // 既に実行されている場合でも、初期化を再実行できるようにする
         if (window.__edsInspectorInitialized) {
           console.log('[EDS Inspector Content] Re-initializing...');
@@ -114,6 +122,7 @@ export async function handleMessage(message, sender, sendResponse) {
           state.sections = [];
           state.blocks = [];
           state.icons = [];
+          state.isAnalyzed = false; // 解析済みフラグもリセット
         }
         // オーバーレイを表示状態にする（確実にtrueに設定）
         state.overlaysVisible = true;
@@ -149,6 +158,8 @@ export async function handleMessage(message, sender, sendResponse) {
       }
       case 'reanalyze': {
         console.log('[EDS Inspector Content] reanalyze called');
+        // 再解析時は解析済みフラグをリセット
+        state.isAnalyzed = false;
         await analyzePage();
         console.log('[EDS Inspector Content] analyzePage completed, jsonFiles:', state.jsonFiles ? state.jsonFiles.size : 0);
         await loadCodeAndMedia();

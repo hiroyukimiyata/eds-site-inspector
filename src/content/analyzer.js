@@ -51,6 +51,9 @@ export async function analyzePage() {
   // オーバーレイを構築した直後に位置を更新（同期的に）
   refreshOverlayPositions();
   
+  // 解析済みフラグを設定
+  state.isAnalyzed = true;
+  
   // 状態が変更されたことをpanelに通知
   notifyStateChanged();
 }
@@ -63,8 +66,17 @@ export async function init() {
   try {
     await resolveConfig();
     console.log('[EDS Inspector Content] Config resolved');
-    await analyzePage();
-    console.log('[EDS Inspector Content] Page analyzed');
+    
+    // 既に解析済みの場合はスキップ
+    if (state.isAnalyzed) {
+      console.log('[EDS Inspector Content] Already analyzed, skipping analyzePage()');
+    } else {
+      await analyzePage();
+      console.log('[EDS Inspector Content] Page analyzed');
+    }
+    
+    // loadCodeAndMediaは既にanalyzePage内で呼ばれているが、
+    // 解析済みの場合でも再実行する（コードやメディアが更新されている可能性がある）
     await loadCodeAndMedia();
     console.log('[EDS Inspector Content] Code and media loaded');
     

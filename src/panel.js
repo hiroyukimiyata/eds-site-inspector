@@ -20,6 +20,29 @@ const sendToContentWithTabId = (type, payload) => sendToContent(tabId, type, pay
 const ensureContentInjectedWithTabId = () => ensureContentInjected(tabId);
 
 /**
+ * 選択されたタブを保存
+ */
+function saveSelectedTab(tab) {
+  try {
+    sessionStorage.setItem('eds-selected-tab', tab);
+  } catch (err) {
+    console.warn('[EDS Inspector Panel] Failed to save selected tab:', err);
+  }
+}
+
+/**
+ * 選択されたタブを取得
+ */
+function getSelectedTab() {
+  try {
+    return sessionStorage.getItem('eds-selected-tab') || 'control';
+  } catch (err) {
+    console.warn('[EDS Inspector Panel] Failed to get selected tab:', err);
+    return 'control';
+  }
+}
+
+/**
  * タブを切り替え
  */
 async function switchTab(tab) {
@@ -29,6 +52,9 @@ async function switchTab(tab) {
   document.querySelectorAll('[data-tab-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.tabPanel !== tab;
   });
+  
+  // 選択されたタブを保存
+  saveSelectedTab(tab);
   
   // Docsタブが選択されたときだけrenderDocsを呼ぶ
   if (tab === 'docs') {
@@ -152,7 +178,9 @@ async function initializePanel() {
     }
     
     bindTabs();
-    await switchTab('control');
+    // 保存されたタブを復元、なければ'control'をデフォルトとして使用
+    const savedTab = getSelectedTab();
+    await switchTab(savedTab);
     console.log('[EDS Inspector Panel] Ensuring content script is injected...');
     
     try {
@@ -197,34 +225,51 @@ async function initializePanel() {
     // コンテンツスクリプトがロードされるまで少し待つ
     await new Promise((resolve) => setTimeout(resolve, 200));
     
+    // 既に解析済みかどうかを確認
+    let isAlreadyAnalyzed = false;
     try {
-      console.log('[EDS Inspector Panel] Scrolling page and initializing...');
-      await scrollAndAnalyze();
-      console.log('[EDS Inspector Panel] Initialization complete');
-    } catch (e) {
-      console.warn('[EDS Inspector Panel] Init message failed, retrying...', e);
-      // if content not ready yet, retry once
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      try {
-        await scrollAndAnalyze();
-        console.log('[EDS Inspector Panel] Initialization complete after retry');
-      } catch (retryErr) {
-        console.error('[EDS Inspector Panel] Init message failed after retry:', retryErr);
-        if (controlPanel) {
-          controlPanel.innerHTML = `
-            <div class="eds-error" style="padding: 20px; color: #d32f2f;">
-              <h3>Error: Failed to initialize content script</h3>
-              <p>${retryErr.message}</p>
-              <p>The content script may not be loaded. Please try:</p>
-              <ul>
-                <li>Refreshing the page</li>
-                <li>Checking the page console for errors</li>
-              </ul>
-            </div>
-          `;
-        }
-        throw retryErr;
+      const currentState = await sendToContentWithTabId('state');
+      if (currentState && currentState.isAnalyzed) {
+        isAlreadyAnalyzed = true;
+        console.log('[EDS Inspector Panel] Already analyzed, skipping initialization');
       }
+    } catch (e) {
+      console.log('[EDS Inspector Panel] Could not check state, will initialize:', e);
+    }
+    
+    // 解析済みでない場合のみ初期化を実行
+    if (!isAlreadyAnalyzed) {
+      try {
+        console.log('[EDS Inspector Panel] Scrolling page and initializing...');
+        await scrollAndAnalyze();
+        console.log('[EDS Inspector Panel] Initialization complete');
+      } catch (e) {
+        console.warn('[EDS Inspector Panel] Init message failed, retrying...', e);
+        // if content not ready yet, retry once
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        try {
+          await scrollAndAnalyze();
+          console.log('[EDS Inspector Panel] Initialization complete after retry');
+        } catch (retryErr) {
+          console.error('[EDS Inspector Panel] Init message failed after retry:', retryErr);
+          if (controlPanel) {
+            controlPanel.innerHTML = `
+              <div class="eds-error" style="padding: 20px; color: #d32f2f;">
+                <h3>Error: Failed to initialize content script</h3>
+                <p>${retryErr.message}</p>
+                <p>The content script may not be loaded. Please try:</p>
+                <ul>
+                  <li>Refreshing the page</li>
+                  <li>Checking the page console for errors</li>
+                </ul>
+              </div>
+            `;
+          }
+          throw retryErr;
+        }
+      }
+    } else {
+      console.log('[EDS Inspector Panel] Skipping initialization, already analyzed');
     }
     
     console.log('[EDS Inspector Panel] Hydrating panels...');
@@ -244,5 +289,68 @@ async function initializePanel() {
   }
 }
 
+/**
+ * Show loading indicator
+ */
+function showReloadingIndicator() {
+  // Remove existing indicator
+  const existing = document.querySelector('.eds-reloading-indicator');
+  if (existing) {
+    existing.remove();
+  }
+  
+  const indicator = document.createElement('div');
+  indicator.className = 'eds-reloading-indicator';
+  indicator.innerHTML = `
+    <div class="eds-reloading-indicator__content">
+      <div class="eds-reloading-indicator__spinner"></div>
+      <span class="eds-reloading-indicator__text">Reloading page...</span>
+    </div>
+  `;
+  
+  // Add to the beginning of main element
+  const main = document.querySelector('main');
+  if (main) {
+    main.insertBefore(indicator, main.firstChild);
+  }
+}
+
+/**
+ * Hide loading indicator
+ */
+function hideReloadingIndicator() {
+  const indicator = document.querySelector('.eds-reloading-indicator');
+  if (indicator) {
+    indicator.remove();
+  }
+}
+
 console.log('[EDS Inspector Panel] Panel script loaded');
 window.initializePanel = initializePanel;
+
+// Detect page navigation and automatically reload
+if (chrome.devtools && chrome.devtools.network) {
+  chrome.devtools.network.onNavigated.addListener(async (url) => {
+    console.log('[EDS Inspector Panel] Page navigation detected:', url);
+    // Show loading indicator
+    showReloadingIndicator();
+    
+    // Automatically reload on page navigation
+    try {
+      await hydratePanels();
+      console.log('[EDS Inspector Panel] Panels refreshed after page navigation');
+    } catch (err) {
+      console.error('[EDS Inspector Panel] Error refreshing panels after navigation:', err);
+      // Retry initialization if error occurs
+      try {
+        await initializePanel();
+      } catch (initErr) {
+        console.error('[EDS Inspector Panel] Error re-initializing panel after navigation:', initErr);
+      }
+    } finally {
+      // Hide loading indicator
+      hideReloadingIndicator();
+    }
+  });
+  console.log('[EDS Inspector Panel] Page navigation listener attached');
+}

@@ -78,7 +78,7 @@ export function renderJson(state) {
       const urlObj = new URL(jsonFile.url);
       url.textContent = urlObj.pathname + urlObj.search;
     } catch (e) {
-      url.textContent = jsonFile.pathname;
+    url.textContent = jsonFile.pathname;
     }
     url.style.cssText = 'font-size: 11px; color: var(--muted); margin-left: 12px; font-family: monospace;';
     
