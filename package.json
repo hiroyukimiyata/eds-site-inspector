@@ -1,14 +1,15 @@
 {
   "name": "eds-site-inspector",
   "version": "1.0.0",
-  "description": "Chrome extension to inspect Edge Delivery Services pages for sections, blocks, and source assets.",
+  "description": "EDS Site Inspector - Chrome extension to inspect Edge Delivery Services pages for sections, blocks, and source assets.",
   "type": "commonjs",
   "scripts": {
     "build": "node scripts/build.js",
     "watch": "nodemon --watch src --watch scripts/build.js --exec \"npm run build\"",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "package": "npm run build && node scripts/package.js"
   },
   "keywords": [
     "aem",
@@ -17,7 +18,7 @@
     "chrome-extension",
     "inspector"
   ],
-  "author": "",
+  "author": "Hiroyuki Miyata",
   "license": "ISC",
   "devDependencies": {
     "@vitest/ui": "^4.0.14",
