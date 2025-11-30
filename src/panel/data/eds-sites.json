@@ -80,10 +80,6 @@
     "url": "https://business.adobe.com/products/experience-platform/adobe-experience-platform.html"
   },
   {
-    "title": "Adobe Edge Delivery Services",
-    "url": "https://experienceleague.adobe.com/docs/experience-manager-edge-delivery-services/overview.html"
-  },
-  {
     "title": "Qantas",
     "url": "https://www.qantas.com/"
   },
@@ -98,5 +94,17 @@
   {
     "title": "SoftBank Business",
     "url": "https://www.softbank.jp/business/"
+  },
+  {
+    "title": "AEM Boilerplate XWalk",
+    "url": "https://main--aem-boilerplate-xwalk--adobe-rnd.aem.live/"
+  },
+  {
+    "title": "AEM Boilerplate",
+    "url": "https://main--aem-boilerplate--adobe.aem.live/"
+  },
+  {
+    "title": "Fréscopa Coffee",
+    "url": "https://frescopa.coffee/"
   }
 ]

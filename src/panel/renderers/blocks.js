@@ -82,8 +82,15 @@ export function renderBlocks(state, refresh, tabId) {
         // 選択状態を追加
         li.classList.add('is-selected');
         
-        await sendToContent(tabId, 'select-block', { id: block.id });
-        const detail = await sendToContent(tabId, 'get-block-detail', { id: block.id });
+        // 同じ名前のブロックを取得して、最初のインスタンスにスクロール
+        const blocksWithSameName = await sendToContent(tabId, 'get-blocks-by-name', { name: block.name });
+        const firstBlock = blocksWithSameName && blocksWithSameName.length > 0 ? blocksWithSameName[0] : block;
+        
+        await sendToContent(tabId, 'select-block', { id: firstBlock.id });
+        await sendToContent(tabId, 'scroll-to-block', { id: firstBlock.id });
+        await sendToContent(tabId, 'highlight', { id: firstBlock.id });
+        
+        const detail = await sendToContent(tabId, 'get-block-detail', { id: firstBlock.id });
         renderBlockDetail(state, detail, refresh, tabId);
       });
       
