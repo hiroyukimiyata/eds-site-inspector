@@ -5116,11 +5116,22 @@
   function safeIndentHtml(html) {
     if (!html || typeof html !== "string") return html;
     try {
+      const isFullDocument = /<!DOCTYPE\s+html>/i.test(html) || /^\s*<html/i.test(html.trim());
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
       const errorNode = doc.querySelector("parsererror");
       if (errorNode) {
         return fallbackToJsBeautify(html);
+      }
+      if (isFullDocument) {
+        const htmlElement = doc.documentElement;
+        if (htmlElement && htmlElement.tagName.toLowerCase() === "html") {
+          let result = "<!DOCTYPE html>\n";
+          result += formatElementRecursive(htmlElement, 0, 2);
+          if (result && result.trim()) {
+            return result;
+          }
+        }
       }
       const body = doc.body;
       if (body && body.firstElementChild) {
@@ -5128,6 +5139,9 @@
         if (formatted && formatted.trim()) {
           return formatted;
         }
+      }
+      if (body && body.innerHTML.trim()) {
+        return fallbackToJsBeautify(html);
       }
       return fallbackToJsBeautify(html);
     } catch (e) {
@@ -5221,6 +5235,10 @@
       const existing = container.querySelector(".eds-docs-content");
       if (existing) existing.remove();
     }
+    const actualDocUrl = docUrl !== null && docUrl !== void 0 ? docUrl : currentSelectedDocUrl || null;
+    if (true) {
+      console.log("[EDS Inspector Panel] renderSingleDoc - docUrl:", docUrl, "actualDocUrl:", actualDocUrl, "currentSelectedDocUrl:", currentSelectedDocUrl);
+    }
     const contentArea = document.createElement("div");
     contentArea.className = "eds-docs-content";
     contentArea.style.cssText = "padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;";
@@ -5240,26 +5258,86 @@
         fullscreenBtn.style.opacity = "0.7";
         fullscreenBtn.style.background = "transparent";
       });
-      fullscreenBtn.addEventListener("click", (e) => {
+      fullscreenBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const fileType = mode === "markdown" ? "markdown" : "html";
-        const processedCode = processCode(content, fileType, mode === "markdown" ? "Markdown" : "Markup");
-        let title = mode === "markdown" ? "Markdown" : "Markup";
-        if (docUrl) {
+        const currentUrl = actualDocUrl || currentSelectedDocUrl;
+        if (!currentUrl) {
+          console.error("[EDS Inspector Panel] No URL available for fullscreen view");
+          return;
+        }
+        let fullscreenContent;
+        try {
+          if (currentMode === "markdown") {
+            const markdownUrl = getMarkdownUrl(currentUrl);
+            if (!markdownUrl) {
+              console.error("[EDS Inspector Panel] Could not construct markdown URL for fullscreen");
+              return;
+            }
+            const now = Date.now();
+            const cacheAge = markdownCache.timestamp ? now - markdownCache.timestamp : Infinity;
+            const useCache = markdownCache.url === markdownUrl && cacheAge < 5 * 60 * 1e3;
+            if (useCache && markdownCache.content) {
+              fullscreenContent = markdownCache.content;
+              console.log("[EDS Inspector Panel] Using cached markdown for fullscreen");
+            } else {
+              const response = await fetch(markdownUrl);
+              if (!response.ok) {
+                console.error("[EDS Inspector Panel] Failed to load markdown for fullscreen:", response.status, response.statusText);
+                return;
+              }
+              fullscreenContent = await response.text();
+              markdownCache = {
+                url: markdownUrl,
+                content: fullscreenContent,
+                timestamp: now
+              };
+            }
+          } else {
+            const html = await sendToContent(tabId, "get-fetched-html-content", { url: currentUrl });
+            if (html) {
+              fullscreenContent = html;
+            } else {
+              const response = await fetch(currentUrl);
+              if (!response.ok) {
+                console.error("[EDS Inspector Panel] Failed to load markup for fullscreen:", response.status, response.statusText);
+                return;
+              }
+              fullscreenContent = await response.text();
+            }
+          }
+        } catch (err) {
+          console.error("[EDS Inspector Panel] Failed to fetch content for fullscreen:", err);
+          return;
+        }
+        if (!fullscreenContent) {
+          console.error("[EDS Inspector Panel] Could not fetch content for fullscreen");
+          return;
+        }
+        if (true) {
+          console.log("[EDS Inspector Panel] Fullscreen - currentUrl:", currentUrl);
+          console.log("[EDS Inspector Panel] Fullscreen - fullscreenContent length:", fullscreenContent ? fullscreenContent.length : 0);
+          console.log("[EDS Inspector Panel] Fullscreen - fullscreenContent preview (first 500 chars):", fullscreenContent ? fullscreenContent.substring(0, 500) : "null");
+          console.log("[EDS Inspector Panel] Fullscreen - content parameter length:", content ? content.length : 0);
+          console.log("[EDS Inspector Panel] Fullscreen - content parameter preview (first 500 chars):", content ? content.substring(0, 500) : "null");
+        }
+        const fileType = currentMode === "markdown" ? "markdown" : "html";
+        const processedCode = processCode(fullscreenContent, fileType, currentMode === "markdown" ? "Markdown" : "Markup");
+        let title = currentMode === "markdown" ? "Markdown" : "Markup";
+        if (currentUrl) {
           try {
-            const urlObj = new URL(docUrl);
+            const urlObj = new URL(currentUrl);
             let pathname = urlObj.pathname;
             if (pathname === "/" || pathname === "") {
               pathname = "/";
             }
             title = `${pathname} - ${title}`;
           } catch (e2) {
-            title = `${docUrl} - ${title}`;
+            title = `${currentUrl} - ${title}`;
           }
         }
-        const fullscreenSearchKey = docUrl ? `docs-${mode}-fullscreen-${docUrl}` : `docs-${mode}-fullscreen-${Date.now()}`;
-        const codeForFullscreen = mode === "markdown" ? content : processedCode;
-        createFullscreenViewer(content, codeForFullscreen, title, fullscreenSearchKey);
+        const fullscreenSearchKey = `docs-${currentMode}-fullscreen-${currentUrl}`;
+        const codeForFullscreen = currentMode === "markdown" ? fullscreenContent : processedCode;
+        createFullscreenViewer(fullscreenContent, codeForFullscreen, title, fullscreenSearchKey);
       });
       searchBar.appendChild(fullscreenBtn);
     }
@@ -5378,20 +5456,50 @@
         if (pathname === "/" || pathname === "") {
           pathname = "/";
         }
-        const displayName = doc.isMain ? `Main: ${pathname}` : pathname;
-        tab.textContent = displayName;
+        if (doc.isMain) {
+          const icon = document.createElement("span");
+          icon.textContent = "Main";
+          icon.style.cssText = "display: inline-block; margin-right: 6px; padding: 2px 4px; font-size: 9px; font-weight: 600; color: var(--text); background: var(--bg-muted); border: 1px solid var(--border); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;";
+          tab.appendChild(icon);
+        }
+        const displayName = pathname;
+        const textNode = document.createTextNode(displayName);
+        tab.appendChild(textNode);
       } catch (e) {
-        tab.textContent = doc.url;
+        if (doc.isMain) {
+          const icon = document.createElement("span");
+          icon.textContent = "Main";
+          icon.style.cssText = "display: inline-block; margin-right: 6px; padding: 2px 4px; font-size: 9px; font-weight: 600; color: var(--text); background: var(--bg-muted); border: 1px solid var(--border); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;";
+          tab.appendChild(icon);
+        }
+        const textNode = document.createTextNode(doc.url);
+        tab.appendChild(textNode);
       }
       if (doc.url === currentSelectedDocUrl) {
         tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+        if (doc.isMain) {
+          const selectedIcon = tab.querySelector("span");
+          if (selectedIcon) {
+            selectedIcon.style.cssText = "display: inline-block; margin-right: 6px; padding: 2px 4px; font-size: 9px; font-weight: 600; color: white; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;";
+          }
+        }
       }
       tab.addEventListener("click", async () => {
         currentSelectedDocUrl = doc.url;
         docTabsContainer.querySelectorAll("button").forEach((btn) => {
           btn.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+          const icon = btn.querySelector("span");
+          if (icon && icon.textContent === "Main") {
+            icon.style.cssText = "display: inline-block; margin-right: 6px; padding: 2px 4px; font-size: 9px; font-weight: 600; color: var(--text); background: var(--bg-muted); border: 1px solid var(--border); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;";
+          }
         });
         tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+        if (doc.isMain) {
+          const selectedIcon = tab.querySelector("span");
+          if (selectedIcon) {
+            selectedIcon.style.cssText = "display: inline-block; margin-right: 6px; padding: 2px 4px; font-size: 9px; font-weight: 600; color: white; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;";
+          }
+        }
         await loadAndRenderDoc(doc.url, tabId);
       });
       docTabsContainer.appendChild(tab);

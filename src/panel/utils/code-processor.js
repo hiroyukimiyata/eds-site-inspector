@@ -37,6 +37,9 @@ export function safeIndentHtml(html) {
   if (!html || typeof html !== 'string') return html;
   
   try {
+    // 完全なHTMLドキュメントかどうかを判定（<!DOCTYPE html>または<html>タグが含まれているか）
+    const isFullDocument = /<!DOCTYPE\s+html>/i.test(html) || /^\s*<html/i.test(html.trim());
+    
     // DOMParserを使ってHTMLをパース
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
@@ -46,7 +49,20 @@ export function safeIndentHtml(html) {
       return fallbackToJsBeautify(html);
     }
     
-    // bodyの最初の子要素を取得（outerHTMLは1つの要素を返すため）
+    // 完全なHTMLドキュメントの場合のみ、documentElement全体を処理
+    if (isFullDocument) {
+      const htmlElement = doc.documentElement;
+      if (htmlElement && htmlElement.tagName.toLowerCase() === 'html') {
+        // HTML全体をフォーマット（DOCTYPEを含む）
+        let result = '<!DOCTYPE html>\n';
+        result += formatElementRecursive(htmlElement, 0, 2);
+        if (result && result.trim()) {
+          return result;
+        }
+      }
+    }
+    
+    // フラグメント（部分的なHTML）の場合は、bodyの最初の子要素を取得
     const body = doc.body;
     if (body && body.firstElementChild) {
       const formatted = formatElementRecursive(body.firstElementChild, 0, 2);
@@ -54,6 +70,11 @@ export function safeIndentHtml(html) {
       if (formatted && formatted.trim()) {
         return formatted;
       }
+    }
+    
+    // bodyに子要素がない場合は、bodyの内容をそのまま返す
+    if (body && body.innerHTML.trim()) {
+      return fallbackToJsBeautify(html);
     }
     
     // フォーマットできない場合はフォールバック
