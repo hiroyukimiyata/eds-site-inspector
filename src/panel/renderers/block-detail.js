@@ -141,7 +141,7 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   
   const markupContent = document.createElement('div');
   markupContent.className = 'eds-markup-content';
-  markupContent.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; background: var(--bg);';
+  markupContent.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; background: var(--bg); overflow: hidden;';
   
   // SSRマークアップ
   const ssrMarkupContent = detail.ssrMarkup || null;
@@ -200,7 +200,7 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   ssrHeader.appendChild(ssrFullscreenBtn);
   
   const ssrCodeContainer = document.createElement('div');
-  ssrCodeContainer.style.cssText = 'position: relative;';
+  ssrCodeContainer.style.cssText = 'position: relative; overflow: hidden; width: 100%;';
   
   if (ssrMarkupContent) {
     // 検索UIを追加
@@ -276,7 +276,7 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   csrHeader.appendChild(csrFullscreenBtn);
   
   const csrCodeContainer = document.createElement('div');
-  csrCodeContainer.style.cssText = 'position: relative;';
+  csrCodeContainer.style.cssText = 'position: relative; overflow: hidden; width: 100%;';
   
   if (csrMarkupContent !== 'No markup captured for this block.') {
     // 検索UIを追加

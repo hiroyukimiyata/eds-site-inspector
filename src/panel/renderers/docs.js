@@ -90,8 +90,11 @@ function renderSingleDoc(container, content, mode, tabId, isNested = false, docU
         }
       }
       
-      const fullscreenSearchKey = `docs-${mode}-fullscreen-${Date.now()}`;
-      createFullscreenViewer(content, processedCode, title, fullscreenSearchKey);
+      // URLベースの検索キーを使用（同じファイルは同じキーになるように）
+      const fullscreenSearchKey = docUrl ? `docs-${mode}-fullscreen-${docUrl}` : `docs-${mode}-fullscreen-${Date.now()}`;
+      // Markdownの場合はプレーンテキストを使用（カラーを適用しない）
+      const codeForFullscreen = mode === 'markdown' ? content : processedCode;
+      createFullscreenViewer(content, codeForFullscreen, title, fullscreenSearchKey);
     });
     searchBar.appendChild(fullscreenBtn);
   }

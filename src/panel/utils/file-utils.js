@@ -193,16 +193,16 @@ function showCopyError(button) {
 export function createSearchUI(contentElement, rawText, searchKey = null) {
   const searchContainer = document.createElement('div');
   searchContainer.className = 'eds-search-container';
-  searchContainer.style.cssText = 'display: flex; flex-direction: column; gap: 0; background: var(--bg-muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;';
+  searchContainer.style.cssText = 'display: flex; flex-direction: column; gap: 0; background: var(--bg-muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; width: 100%; box-sizing: border-box;';
   
   const searchBar = document.createElement('div');
-  searchBar.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px;';
+  searchBar.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 8px; width: 100%; box-sizing: border-box; overflow: hidden;';
   
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.placeholder = 'Search in file... (Ctrl+F / Cmd+F)';
   searchInput.className = 'eds-search-input';
-  searchInput.style.cssText = 'flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;';
+  searchInput.style.cssText = 'flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;';
   
   // 保存された検索ワードを復元
   if (searchKey) {
@@ -214,20 +214,20 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   
   const searchInfo = document.createElement('span');
   searchInfo.className = 'eds-search-info';
-  searchInfo.style.cssText = 'font-size: 11px; color: var(--muted); min-width: 60px; text-align: right;';
+  searchInfo.style.cssText = 'font-size: 11px; color: var(--muted); min-width: 60px; text-align: right; flex-shrink: 0;';
   
   const prevBtn = document.createElement('button');
   prevBtn.innerHTML = '◀';
   prevBtn.title = 'Previous match';
   prevBtn.className = 'eds-search-nav';
-  prevBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;';
+  prevBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s; flex-shrink: 0;';
   prevBtn.disabled = true;
   
   const nextBtn = document.createElement('button');
   nextBtn.innerHTML = '▶';
   nextBtn.title = 'Next match';
   nextBtn.className = 'eds-search-nav';
-  nextBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;';
+  nextBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s; flex-shrink: 0;';
   nextBtn.disabled = true;
   
   searchBar.appendChild(searchInput);
@@ -273,11 +273,27 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
       return;
     }
     
-    // プレーンテキストから検索マッチを探す
+    // code要素内のテキストノードを取得
+    const walker = document.createTreeWalker(
+      codeElement,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    const textNodes = [];
+    let node;
+    while (node = walker.nextNode()) {
+      textNodes.push(node);
+    }
+    
+    // テキストノードからプレーンテキストを再構築（シンタックスハイライトのHTMLタグを無視）
+    const reconstructedText = textNodes.map(n => n.textContent).join('');
+    
+    // 再構築したテキストに対して検索を行う
     const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     const matchIndices = [];
     let match;
-    while ((match = regex.exec(textToSearch)) !== null) {
+    while ((match = regex.exec(reconstructedText)) !== null) {
       matchIndices.push({
         index: match.index,
         length: match[0].length
@@ -286,20 +302,7 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
     
     // マッチが見つかった場合、code要素内のテキストノードを検索してハイライト
     if (matchIndices.length > 0) {
-      // code要素内のテキストノードを取得
-      const walker = document.createTreeWalker(
-        codeElement,
-        NodeFilter.SHOW_TEXT,
-        null
-      );
-      
-      const textNodes = [];
-      let node;
-      while (node = walker.nextNode()) {
-        textNodes.push(node);
-      }
-      
-      // テキストノードの累積オフセットを計算
+      // テキストノードの累積オフセットを計算（テキストノードのtextContentのみを使用）
       let cumulativeOffset = 0;
       let matchIndex = 0;
       
