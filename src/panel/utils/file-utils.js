@@ -579,9 +579,9 @@ export function createFullscreenViewer(rawContent, processedHtml, title, searchK
   const copyBtn = createCopyButton(rawContent, null, null);
   copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 12px; transition: all 0.2s;';
   
-  // 閉じるボタン
+  // 閉じるボタン（領域を小さくするニュアンスのアイコン）
   const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '✕';
+  closeBtn.innerHTML = '⊟';
   closeBtn.title = 'Close (ESC)';
   closeBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;';
   closeBtn.addEventListener('click', () => {

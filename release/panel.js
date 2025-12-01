@@ -772,7 +772,7 @@
     const copyBtn = createCopyButton(rawContent, null, null);
     copyBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 12px; transition: all 0.2s;";
     const closeBtn = document.createElement("button");
-    closeBtn.innerHTML = "\u2715";
+    closeBtn.innerHTML = "\u229F";
     closeBtn.title = "Close (ESC)";
     closeBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;";
     closeBtn.addEventListener("click", () => {
@@ -5226,7 +5226,11 @@
     sourcePre.className = "eds-code";
     sourcePre.style.cssText = "background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;";
     const sourceCode = document.createElement("code");
-    sourceCode.textContent = content;
+    if (mode === "markdown") {
+      sourceCode.textContent = content;
+    } else {
+      sourceCode.innerHTML = highlightCode(content, "html");
+    }
     sourceCode.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
     sourcePre.appendChild(sourceCode);
     codeContainer.appendChild(sourcePre);
@@ -6364,6 +6368,24 @@
               const copyBtn = createCopyButton(codeText, null, null);
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
+              const fullscreenBtn = document.createElement("button");
+              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.title = "Fullscreen view";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.addEventListener("mouseenter", () => {
+                fullscreenBtn.style.opacity = "1";
+                fullscreenBtn.style.background = "var(--bg)";
+              });
+              fullscreenBtn.addEventListener("mouseleave", () => {
+                fullscreenBtn.style.opacity = "0.7";
+                fullscreenBtn.style.background = "transparent";
+              });
+              fullscreenBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const searchKey2 = `script-${scriptFile.url}`;
+                createFullscreenViewer(codeText, code.innerHTML, scriptFile.pathname || scriptFile.url, searchKey2);
+              });
+              rightSection.appendChild(fullscreenBtn);
             }
             const searchKey = `script-${scriptFile.url}`;
             const searchUI = createSearchUI(content, codeText, searchKey);
@@ -6615,6 +6637,24 @@
               const copyBtn = createCopyButton(jsonString, null, null);
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
+              const fullscreenBtn = document.createElement("button");
+              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.title = "Fullscreen view";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.addEventListener("mouseenter", () => {
+                fullscreenBtn.style.opacity = "1";
+                fullscreenBtn.style.background = "var(--bg)";
+              });
+              fullscreenBtn.addEventListener("mouseleave", () => {
+                fullscreenBtn.style.opacity = "0.7";
+                fullscreenBtn.style.background = "transparent";
+              });
+              fullscreenBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const searchKey2 = `json-${jsonFile.url}`;
+                createFullscreenViewer(jsonString, code.innerHTML, jsonFile.pathname || jsonFile.url, searchKey2);
+              });
+              rightSection.appendChild(fullscreenBtn);
             }
             const searchKey = `json-${jsonFile.url}`;
             const searchUI = createSearchUI(content, jsonString, searchKey);

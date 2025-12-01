@@ -221,6 +221,26 @@ export function renderJson(state) {
             const copyBtn = createCopyButton(jsonString, null, null);
             copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
             rightSection.appendChild(copyBtn);
+            
+            // 全画面表示ボタンを追加
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.innerHTML = '⛶';
+            fullscreenBtn.title = 'Fullscreen view';
+            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
+            fullscreenBtn.addEventListener('mouseenter', () => {
+              fullscreenBtn.style.opacity = '1';
+              fullscreenBtn.style.background = 'var(--bg)';
+            });
+            fullscreenBtn.addEventListener('mouseleave', () => {
+              fullscreenBtn.style.opacity = '0.7';
+              fullscreenBtn.style.background = 'transparent';
+            });
+            fullscreenBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const searchKey = `json-${jsonFile.url}`;
+              createFullscreenViewer(jsonString, code.innerHTML, jsonFile.pathname || jsonFile.url, searchKey);
+            });
+            rightSection.appendChild(fullscreenBtn);
           }
           
           // 検索キーを生成（URLをキーにする）

@@ -1,6 +1,6 @@
 import { getMarkdownUrl } from '../../utils/url.js';
 import { createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
-import { sendToContent } from '../utils.js';
+import { sendToContent, highlightCode } from '../utils.js';
 import { processCode } from '../utils/code-processor.js';
 
 // Markdownのキャッシュ
@@ -89,7 +89,12 @@ function renderSingleDoc(container, content, mode, tabId, isNested = false) {
   sourcePre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
   
   const sourceCode = document.createElement('code');
-  sourceCode.textContent = content;
+  // シンタックスハイライトを適用（Markdownはカラーなし）
+  if (mode === 'markdown') {
+    sourceCode.textContent = content;
+  } else {
+    sourceCode.innerHTML = highlightCode(content, 'html');
+  }
   sourceCode.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
   
   sourcePre.appendChild(sourceCode);
