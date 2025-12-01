@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const distDir = path.resolve(__dirname, '../dist');
 const releaseDir = path.resolve(__dirname, '../release');
+const zipFileName = 'eds-site-inspector-release.zip';
+const zipPath = path.resolve(__dirname, '..', zipFileName);
 
 function copyFile(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -37,5 +40,30 @@ if (fs.existsSync(releaseDir)) {
 copyDir(distDir, releaseDir);
 
 console.log('✅ Release folder created successfully: release/');
-console.log('   Ready for GitHub commit and push!');
+
+// releaseフォルダの内容をZIP化
+if (!fs.existsSync(releaseDir)) {
+  console.error(`Error: ${releaseDir} does not exist.`);
+  process.exit(1);
+}
+
+// 既存のZIPファイルを削除
+if (fs.existsSync(zipPath)) {
+  fs.unlinkSync(zipPath);
+  console.log(`Removed existing ${zipFileName}`);
+}
+
+// ZIPファイルを作成
+try {
+  process.chdir(releaseDir);
+  execSync(`zip -r "${zipPath}" . -x "*.DS_Store" "*.map"`, {
+    stdio: 'inherit',
+  });
+  console.log(`\n✅ Release ZIP created successfully: ${zipFileName}`);
+  console.log(`   Location: ${zipPath}`);
+  console.log(`\n📦 Ready for GitHub Release upload!`);
+} catch (error) {
+  console.error('Error creating ZIP file:', error.message);
+  process.exit(1);
+}
 

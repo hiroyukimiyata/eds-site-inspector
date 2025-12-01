@@ -864,33 +864,14 @@
           let ssrElement = null;
           if (mainSSR) {
             try {
-              if (mainLive.contains(liveElement)) {
-                const path = computeElementPath(liveElement, mainLive);
-                ssrElement = findElementByPath(mainSSR, path);
-                if (ssrElement && blockName !== "header" && blockName !== "footer") {
-                  let current = ssrElement;
-                  let foundBlockElement = null;
-                  while (current && current !== mainSSR) {
-                    const classList = Array.from(current.classList || []);
-                    if (classList.includes(blockName)) {
-                      foundBlockElement = current;
-                      break;
-                    }
-                    current = current.parentElement;
-                  }
-                  if (foundBlockElement) {
-                    ssrElement = foundBlockElement;
-                  }
-                }
+              let allLiveElements = [];
+              if (blockName === "header" || blockName === "footer") {
+                allLiveElements = Array.from(document.querySelectorAll(blockName));
+              } else {
+                allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
               }
-              if (!ssrElement) {
-                let allLiveElements = [];
-                if (blockName === "header" || blockName === "footer") {
-                  allLiveElements = Array.from(document.querySelectorAll(blockName));
-                } else {
-                  allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
-                }
-                const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+              if (liveIndex >= 0) {
                 for (const [url, ssrDoc] of ssrDocuments.entries()) {
                   let allSSRElements = [];
                   if (blockName === "header" || blockName === "footer") {
@@ -911,9 +892,30 @@
                     break;
                   }
                 }
-                if (!ssrElement) {
-                  console.warn("[EDS Inspector] Could not find SSR element for", blockName, "in any SSR document");
+              }
+              if (!ssrElement && mainLive.contains(liveElement)) {
+                const path = computeElementPath(liveElement, mainLive);
+                const pathBasedElement = findElementByPath(mainSSR, path);
+                if (pathBasedElement && blockName !== "header" && blockName !== "footer") {
+                  let current = pathBasedElement;
+                  let foundBlockElement = null;
+                  while (current && current !== mainSSR) {
+                    const classList = Array.from(current.classList || []);
+                    if (classList.includes(blockName)) {
+                      foundBlockElement = current;
+                      break;
+                    }
+                    current = current.parentElement;
+                  }
+                  if (foundBlockElement) {
+                    ssrElement = foundBlockElement;
+                  }
+                } else if (pathBasedElement) {
+                  ssrElement = pathBasedElement;
                 }
+              }
+              if (!ssrElement) {
+                console.warn("[EDS Inspector] Could not find SSR element for", blockName, "in any SSR document");
               }
             } catch (e) {
               console.warn("[EDS Inspector] Error finding SSR element:", e);
@@ -997,37 +999,11 @@
           let ssrElement = null;
           if (mainSSR) {
             try {
-              if (mainLive.contains(liveElement)) {
-                const path = computeElementPath(liveElement, mainLive);
-                ssrElement = findElementByPath(mainSSR, path);
-                if (ssrElement && blockName !== "header" && blockName !== "footer") {
-                  let current = ssrElement;
-                  let foundBlockElement = null;
-                  while (current && current !== mainSSR) {
-                    const classList2 = Array.from(current.classList || []);
-                    if (classList2.includes(blockName)) {
-                      foundBlockElement = current;
-                      break;
-                    }
-                    current = current.parentElement;
-                  }
-                  if (foundBlockElement) {
-                    ssrElement = foundBlockElement;
-                  }
-                }
-              }
-              if (!ssrElement) {
-                const ssrElementsInMain = mainSSR.querySelectorAll(`.${escapeCSS(blockName)}`);
-                const liveIndex = Array.from(liveElements).indexOf(liveElement);
-                if (liveIndex >= 0 && liveIndex < ssrElementsInMain.length) {
-                  ssrElement = ssrElementsInMain[liveIndex];
-                }
-              }
-              if (!ssrElement) {
-                const allLiveElements = document.querySelectorAll(`.${escapeCSS(blockName)}`);
-                const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+              const allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
+              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+              if (liveIndex >= 0) {
                 for (const [url, ssrDoc] of ssrDocuments.entries()) {
-                  const allSSRElements = ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`);
+                  const allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
                   console.log("[EDS Inspector] Searching SSR element for", blockName, "in", url, {
                     allSSRElementsCount: allSSRElements.length,
                     allLiveElementsCount: allLiveElements.length,
@@ -1040,9 +1016,30 @@
                     break;
                   }
                 }
-                if (!ssrElement) {
-                  console.warn("[EDS Inspector] Could not find SSR element for", blockName, "in any SSR document");
+              }
+              if (!ssrElement && mainLive.contains(liveElement)) {
+                const path = computeElementPath(liveElement, mainLive);
+                const pathBasedElement = findElementByPath(mainSSR, path);
+                if (pathBasedElement && blockName !== "header" && blockName !== "footer") {
+                  let current = pathBasedElement;
+                  let foundBlockElement = null;
+                  while (current && current !== mainSSR) {
+                    const classList2 = Array.from(current.classList || []);
+                    if (classList2.includes(blockName)) {
+                      foundBlockElement = current;
+                      break;
+                    }
+                    current = current.parentElement;
+                  }
+                  if (foundBlockElement) {
+                    ssrElement = foundBlockElement;
+                  }
+                } else if (pathBasedElement) {
+                  ssrElement = pathBasedElement;
                 }
+              }
+              if (!ssrElement) {
+                console.warn("[EDS Inspector] Could not find SSR element for", blockName, "in any SSR document");
               }
             } catch (e) {
               console.warn("[EDS Inspector] Error finding SSR element:", e);

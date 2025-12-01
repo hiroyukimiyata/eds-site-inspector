@@ -166,46 +166,19 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
         let ssrElement = null;
         if (mainSSR) {
           try {
-            // ライブ要素がmain要素内にある場合
-            if (mainLive.contains(liveElement)) {
-              // ライブ要素からパスを計算
-              const path = computeElementPath(liveElement, mainLive);
-              // SSR要素を見つける
-              ssrElement = findElementByPath(mainSSR, path);
-              
-              // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
-              // ブロッククラスを持たない場合は、親要素を探してブロッククラスを持つ要素を見つける
-              if (ssrElement && blockName !== 'header' && blockName !== 'footer') {
-                let current = ssrElement;
-                let foundBlockElement = null;
-                // 親要素を遡ってブロッククラスを持つ要素を探す
-                while (current && current !== mainSSR) {
-                  const classList = Array.from(current.classList || []);
-                  if (classList.includes(blockName)) {
-                    foundBlockElement = current;
-                    break;
-                  }
-                  current = current.parentElement;
-                }
-                if (foundBlockElement) {
-                  ssrElement = foundBlockElement;
-                }
-              }
+            // まず、ブロック名で直接検索する方法を優先（より確実）
+            // headerとfooterはタグ名で検索、それ以外はクラス名で検索
+            let allLiveElements = [];
+            if (blockName === 'header' || blockName === 'footer') {
+              allLiveElements = Array.from(document.querySelectorAll(blockName));
+            } else {
+              allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
             }
             
-            // パスベースで見つからない場合、ブロック名で検索を試す
-            if (!ssrElement) {
-              // headerとfooterはタグ名で検索、それ以外はクラス名で検索
-              let allLiveElements = [];
-              if (blockName === 'header' || blockName === 'footer') {
-                allLiveElements = Array.from(document.querySelectorAll(blockName));
-              } else {
-                allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
-              }
-              
-              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
-              
-              // すべてのSSRドキュメントを検索
+            const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+            
+            // すべてのSSRドキュメントを検索
+            if (liveIndex >= 0) {
               for (const [url, ssrDoc] of ssrDocuments.entries()) {
                 let allSSRElements = [];
                 if (blockName === 'header' || blockName === 'footer') {
@@ -228,10 +201,39 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
                   break;
                 }
               }
+            }
+            
+            // ブロック名で見つからない場合、パスベースで検索を試す（フォールバック）
+            if (!ssrElement && mainLive.contains(liveElement)) {
+              // ライブ要素からパスを計算
+              const path = computeElementPath(liveElement, mainLive);
+              // SSR要素を見つける
+              const pathBasedElement = findElementByPath(mainSSR, path);
               
-              if (!ssrElement) {
-                console.warn('[EDS Inspector] Could not find SSR element for', blockName, 'in any SSR document');
+              // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
+              // ブロッククラスを持たない場合は、親要素を探してブロッククラスを持つ要素を見つける
+              if (pathBasedElement && blockName !== 'header' && blockName !== 'footer') {
+                let current = pathBasedElement;
+                let foundBlockElement = null;
+                // 親要素を遡ってブロッククラスを持つ要素を探す
+                while (current && current !== mainSSR) {
+                  const classList = Array.from(current.classList || []);
+                  if (classList.includes(blockName)) {
+                    foundBlockElement = current;
+                    break;
+                  }
+                  current = current.parentElement;
+                }
+                if (foundBlockElement) {
+                  ssrElement = foundBlockElement;
+                }
+              } else if (pathBasedElement) {
+                ssrElement = pathBasedElement;
               }
+            }
+            
+            if (!ssrElement) {
+              console.warn('[EDS Inspector] Could not find SSR element for', blockName, 'in any SSR document');
             }
           } catch (e) {
             console.warn('[EDS Inspector] Error finding SSR element:', e);
@@ -353,16 +355,39 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
         let ssrElement = null;
         if (mainSSR) {
           try {
-            // ライブ要素がmain要素内にある場合
-            if (mainLive.contains(liveElement)) {
-              // パスベースで検出を試す
+            // まず、ブロック名で直接検索する方法を優先（より確実）
+            const allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
+            const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+            
+            // すべてのSSRドキュメントを検索
+            if (liveIndex >= 0) {
+              for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                const allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
+                console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
+                  allSSRElementsCount: allSSRElements.length,
+                  allLiveElementsCount: allLiveElements.length,
+                  liveIndex,
+                  isOutsideMain: !mainLive.contains(liveElement)
+                });
+                if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
+                  ssrElement = allSSRElements[liveIndex];
+                  console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, ssrElement);
+                  break;
+                }
+              }
+            }
+            
+            // ブロック名で見つからない場合、パスベースで検索を試す（フォールバック）
+            if (!ssrElement && mainLive.contains(liveElement)) {
+              // ライブ要素からパスを計算
               const path = computeElementPath(liveElement, mainLive);
-              ssrElement = findElementByPath(mainSSR, path);
+              // SSR要素を見つける
+              const pathBasedElement = findElementByPath(mainSSR, path);
               
               // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
               // ブロッククラスを持たない場合は、親要素を探してブロッククラスを持つ要素を見つける
-              if (ssrElement && blockName !== 'header' && blockName !== 'footer') {
-                let current = ssrElement;
+              if (pathBasedElement && blockName !== 'header' && blockName !== 'footer') {
+                let current = pathBasedElement;
                 let foundBlockElement = null;
                 // 親要素を遡ってブロッククラスを持つ要素を探す
                 while (current && current !== mainSSR) {
@@ -376,42 +401,13 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
                 if (foundBlockElement) {
                   ssrElement = foundBlockElement;
                 }
+              } else if (pathBasedElement) {
+                ssrElement = pathBasedElement;
               }
             }
             
-            // SSRマークアップから対応する要素を探す（main要素内を先に検索）
             if (!ssrElement) {
-              const ssrElementsInMain = mainSSR.querySelectorAll(`.${escapeCSS(blockName)}`);
-              const liveIndex = Array.from(liveElements).indexOf(liveElement);
-              if (liveIndex >= 0 && liveIndex < ssrElementsInMain.length) {
-                ssrElement = ssrElementsInMain[liveIndex];
-              }
-            }
-            
-            // main要素内で見つからない場合、複数のSSRドキュメントから検索
-            if (!ssrElement) {
-              const allLiveElements = document.querySelectorAll(`.${escapeCSS(blockName)}`);
-              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
-              
-              // すべてのSSRドキュメントを検索
-              for (const [url, ssrDoc] of ssrDocuments.entries()) {
-                const allSSRElements = ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`);
-                console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
-                  allSSRElementsCount: allSSRElements.length,
-                  allLiveElementsCount: allLiveElements.length,
-                  liveIndex,
-                  isOutsideMain: !mainLive.contains(liveElement)
-                });
-                if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
-                  ssrElement = allSSRElements[liveIndex];
-                  console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, ssrElement);
-                  break;
-                }
-              }
-              
-              if (!ssrElement) {
-                console.warn('[EDS Inspector] Could not find SSR element for', blockName, 'in any SSR document');
-              }
+              console.warn('[EDS Inspector] Could not find SSR element for', blockName, 'in any SSR document');
             }
           } catch (e) {
             console.warn('[EDS Inspector] Error finding SSR element:', e);
