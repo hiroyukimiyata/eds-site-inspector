@@ -5482,6 +5482,52 @@
     root.innerHTML = "";
     const overlayControls = document.createElement("div");
     overlayControls.className = "overlay-controls";
+    const allItem = document.createElement("div");
+    allItem.className = "control-item control-item--all";
+    const allLabel = document.createElement("label");
+    allLabel.className = "control-label";
+    const allCheckbox = document.createElement("input");
+    allCheckbox.type = "checkbox";
+    allCheckbox.id = "control-toggle-all";
+    allCheckbox.className = "control-checkbox control-checkbox--all";
+    const allEnabled = state.overlaysEnabled?.sections && state.overlaysEnabled?.blocks && state.overlaysEnabled?.defaultContent;
+    allCheckbox.checked = allEnabled ?? true;
+    allCheckbox.addEventListener("change", async (evt) => {
+      const enabled = evt.target.checked;
+      try {
+        await Promise.all([
+          sendToContent(tabId, "toggle-overlay", { key: "sections", value: enabled }),
+          sendToContent(tabId, "toggle-overlay", { key: "blocks", value: enabled }),
+          sendToContent(tabId, "toggle-overlay", { key: "defaultContent", value: enabled })
+        ]);
+        const sectionsCheckbox2 = document.getElementById("control-toggle-sections");
+        const blocksCheckbox2 = document.getElementById("control-toggle-blocks");
+        const defaultCheckbox2 = document.getElementById("control-toggle-default");
+        if (sectionsCheckbox2) sectionsCheckbox2.checked = enabled;
+        if (blocksCheckbox2) blocksCheckbox2.checked = enabled;
+        if (defaultCheckbox2) defaultCheckbox2.checked = enabled;
+        const state2 = await sendToContent(tabId, "state");
+        if (state2 && state2.overlaysEnabled) {
+          chrome.storage.local.set({
+            "eds-overlays-enabled": state2.overlaysEnabled
+          }).catch((err) => {
+            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
+          });
+        }
+      } finally {
+        refresh();
+      }
+    });
+    const allText = document.createElement("span");
+    allText.className = "control-text control-text--all";
+    allText.textContent = "Show All Overlays";
+    allLabel.appendChild(allCheckbox);
+    allLabel.appendChild(allText);
+    allItem.appendChild(allLabel);
+    overlayControls.appendChild(allItem);
+    const divider = document.createElement("div");
+    divider.className = "control-divider";
+    overlayControls.appendChild(divider);
     const sectionsItem = document.createElement("div");
     sectionsItem.className = "control-item";
     const sectionsLabel = document.createElement("label");
@@ -5494,6 +5540,7 @@
     sectionsCheckbox.addEventListener("change", async (evt) => {
       try {
         await sendToContent(tabId, "toggle-overlay", { key: "sections", value: evt.target.checked });
+        updateToggleAllState();
         const state2 = await sendToContent(tabId, "state");
         if (state2 && state2.overlaysEnabled) {
           chrome.storage.local.set({
@@ -5525,6 +5572,7 @@
     blocksCheckbox.addEventListener("change", async (evt) => {
       try {
         await sendToContent(tabId, "toggle-overlay", { key: "blocks", value: evt.target.checked });
+        updateToggleAllState();
         const state2 = await sendToContent(tabId, "state");
         if (state2 && state2.overlaysEnabled) {
           chrome.storage.local.set({
@@ -5556,6 +5604,7 @@
     defaultCheckbox.addEventListener("change", async (evt) => {
       try {
         await sendToContent(tabId, "toggle-overlay", { key: "defaultContent", value: evt.target.checked });
+        updateToggleAllState();
         const state2 = await sendToContent(tabId, "state");
         if (state2 && state2.overlaysEnabled) {
           chrome.storage.local.set({
@@ -5568,6 +5617,14 @@
         refresh();
       }
     });
+    function updateToggleAllState() {
+      const sectionsCheckbox2 = document.getElementById("control-toggle-sections");
+      const blocksCheckbox2 = document.getElementById("control-toggle-blocks");
+      const defaultCheckbox2 = document.getElementById("control-toggle-default");
+      if (sectionsCheckbox2 && blocksCheckbox2 && defaultCheckbox2 && allCheckbox) {
+        allCheckbox.checked = sectionsCheckbox2.checked && blocksCheckbox2.checked && defaultCheckbox2.checked;
+      }
+    }
     const defaultText = document.createElement("span");
     defaultText.className = "control-text";
     defaultText.textContent = "Default Content";
@@ -7218,6 +7275,7 @@
         if (areaName === "local" && changes["eds-overlays-enabled"]) {
           const newValue = changes["eds-overlays-enabled"].newValue;
           if (newValue) {
+            const allCheckbox = document.getElementById("control-toggle-all");
             const sectionsCheckbox = document.getElementById("control-toggle-sections");
             const blocksCheckbox = document.getElementById("control-toggle-blocks");
             const defaultCheckbox = document.getElementById("control-toggle-default");
@@ -7229,6 +7287,9 @@
             }
             if (defaultCheckbox && newValue.defaultContent !== void 0) {
               defaultCheckbox.checked = newValue.defaultContent;
+            }
+            if (allCheckbox && sectionsCheckbox && blocksCheckbox && defaultCheckbox) {
+              allCheckbox.checked = sectionsCheckbox.checked && blocksCheckbox.checked && defaultCheckbox.checked;
             }
           }
         }

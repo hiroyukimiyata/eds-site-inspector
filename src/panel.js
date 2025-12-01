@@ -408,6 +408,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const newValue = changes['eds-overlays-enabled'].newValue;
     if (newValue) {
       // チェックボックスの状態を更新
+      const allCheckbox = document.getElementById('control-toggle-all');
       const sectionsCheckbox = document.getElementById('control-toggle-sections');
       const blocksCheckbox = document.getElementById('control-toggle-blocks');
       const defaultCheckbox = document.getElementById('control-toggle-default');
@@ -419,6 +420,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       }
       if (defaultCheckbox && newValue.defaultContent !== undefined) {
         defaultCheckbox.checked = newValue.defaultContent;
+      }
+      // toggleAllの状態を更新
+      if (allCheckbox && sectionsCheckbox && blocksCheckbox && defaultCheckbox) {
+        allCheckbox.checked = sectionsCheckbox.checked && blocksCheckbox.checked && defaultCheckbox.checked;
       }
     }
   }

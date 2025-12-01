@@ -772,6 +772,41 @@ section[hidden] {
   font-weight: 500;
 }
 
+.control-item--all {
+  margin-bottom: 8px;
+}
+
+.control-item--all .control-label {
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.control-item--all .control-label:hover {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: var(--accent-plain);
+}
+
+.control-checkbox--all {
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+}
+
+.control-text--all {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.control-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+  opacity: 0.5;
+}
+
 /* Reloading indicator */
 .eds-reloading-indicator {
   position: sticky;

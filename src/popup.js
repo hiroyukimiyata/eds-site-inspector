@@ -40,18 +40,39 @@
       });
     }
 
+    // プラットフォームを検出してDevToolsのショートカットキーを表示
+    try {
+      const platformInfo = await chrome.runtime.getPlatformInfo();
+      const devtoolsHint = document.getElementById('devtools-hint');
+      if (devtoolsHint) {
+        let shortcut = '';
+        if (platformInfo.os === 'mac') {
+          shortcut = 'Cmd+Option+I';
+        } else {
+          // Windows, Linux, etc.
+          shortcut = 'F12 or Ctrl+Shift+I';
+        }
+        devtoolsHint.textContent = `Open DevTools for details (${shortcut})`;
+      }
+    } catch (err) {
+      // プラットフォーム情報が取得できない場合はデフォルトのまま
+      console.log('[EDS Inspector Popup] Could not get platform info:', err);
+    }
+
     // チェックボックスの要素を取得
+    const toggleAll = document.getElementById('toggle-all');
     const toggleSections = document.getElementById('toggle-sections');
     const toggleBlocks = document.getElementById('toggle-blocks');
     const toggleDefault = document.getElementById('toggle-default');
 
-    if (!toggleSections || !toggleBlocks || !toggleDefault) {
+    if (!toggleAll || !toggleSections || !toggleBlocks || !toggleDefault) {
       console.error('[EDS Inspector Popup] Checkboxes not found');
       showError('UI elements not found');
       return;
     }
 
     // 初回表示時は無条件で全てチェック済みに設定（UIの応答性を向上）
+    toggleAll.checked = true;
     toggleSections.checked = true;
     toggleBlocks.checked = true;
     toggleDefault.checked = true;
@@ -131,6 +152,9 @@
       if (blocks !== undefined) toggleBlocks.checked = blocks;
       if (defaultContent !== undefined) toggleDefault.checked = defaultContent;
       
+      // すべてのオーバーレイが有効な場合、toggleAllをチェック
+      toggleAll.checked = sections && blocks && defaultContent;
+      
       // ポップアップが開かれたときにオーバーレイを表示状態にする
       if (!currentState.overlaysVisible) {
         chrome.tabs.sendMessage(tab.id, {
@@ -146,18 +170,76 @@
 
     // チェックボックスの変更イベントを設定（それぞれ独立して動作）
     // チェックボックスの状態は即座に反映され、その後でメッセージを送信（キビキビ動くように）
+    toggleAll.addEventListener('change', () => {
+      const allEnabled = toggleAll.checked;
+      // すべてのチェックボックスを同期
+      toggleSections.checked = allEnabled;
+      toggleBlocks.checked = allEnabled;
+      toggleDefault.checked = allEnabled;
+      // すべてのオーバーレイを一括で更新
+      toggleAllOverlays(allEnabled);
+    });
+
     toggleSections.addEventListener('change', () => {
       // チェックボックスの状態は既に更新されているので、即座にメッセージを送信
       updateOverlayState('sections', toggleSections.checked);
+      // toggleAllの状態を更新
+      updateToggleAllState();
     });
 
     toggleBlocks.addEventListener('change', () => {
       updateOverlayState('blocks', toggleBlocks.checked);
+      updateToggleAllState();
     });
 
     toggleDefault.addEventListener('change', () => {
       updateOverlayState('defaultContent', toggleDefault.checked);
+      updateToggleAllState();
     });
+    
+    /**
+     * toggleAllの状態を更新（個別のチェックボックスが変更されたとき）
+     */
+    function updateToggleAllState() {
+      toggleAll.checked = toggleSections.checked && toggleBlocks.checked && toggleDefault.checked;
+    }
+    
+    /**
+     * すべてのオーバーレイを一括でOn/Off
+     */
+    function toggleAllOverlays(enabled) {
+      // 非同期処理はバックグラウンドで実行（awaitしない）
+      Promise.all([
+        chrome.tabs.sendMessage(tab.id, {
+          target: 'eds-content',
+          type: 'toggle-overlay',
+          payload: { key: 'sections', value: enabled }
+        }),
+        chrome.tabs.sendMessage(tab.id, {
+          target: 'eds-content',
+          type: 'toggle-overlay',
+          payload: { key: 'blocks', value: enabled }
+        }),
+        chrome.tabs.sendMessage(tab.id, {
+          target: 'eds-content',
+          type: 'toggle-overlay',
+          payload: { key: 'defaultContent', value: enabled }
+        })
+      ]).then(() => {
+        // chrome.storageに状態を保存（DevToolsパネルとの同期のため）
+        chrome.storage.local.set({
+          'eds-overlays-enabled': {
+            sections: enabled,
+            blocks: enabled,
+            defaultContent: enabled
+          }
+        }).catch(err => {
+          console.error('[EDS Inspector Popup] Failed to save overlay state:', err);
+        });
+      }).catch(err => {
+        console.error('[EDS Inspector Popup] Failed to toggle all overlays:', err);
+      });
+    }
 
     /**
      * オーバーレイの状態を更新（独立して制御）
@@ -245,6 +327,8 @@
           if (sections !== undefined) toggleSections.checked = sections;
           if (blocks !== undefined) toggleBlocks.checked = blocks;
           if (defaultContent !== undefined) toggleDefault.checked = defaultContent;
+          // toggleAllの状態を更新
+          toggleAll.checked = sections && blocks && defaultContent;
         }
       }
     });

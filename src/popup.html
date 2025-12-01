@@ -13,6 +13,15 @@
     </div>
     <div class="popup-content">
       <div class="overlay-controls">
+        <div class="control-item control-item--all">
+          <label class="control-label">
+            <input type="checkbox" id="toggle-all" class="control-checkbox control-checkbox--all">
+            <span class="control-text control-text--all">Show All Overlays</span>
+          </label>
+        </div>
+        
+        <div class="control-divider"></div>
+        
         <div class="control-item">
           <label class="control-label">
             <input type="checkbox" id="toggle-sections" class="control-checkbox">
@@ -36,7 +45,7 @@
       </div>
       
       <div class="popup-footer">
-        <p class="devtools-hint">Open DevTools for details</p>
+        <p class="devtools-hint" id="devtools-hint">Open DevTools for details</p>
       </div>
     </div>
   </div>
