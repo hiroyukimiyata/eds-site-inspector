@@ -335,6 +335,40 @@
   });
 
   // src/panel/utils/file-utils.js
+  function createFullscreenEnterIcon() {
+    return `
+    <svg version="1.1" id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 512 512" style="width: 32px; height: 32px; opacity: 1;" xml:space="preserve">
+      <style type="text/css">
+        .st0{fill:currentColor;}
+      </style>
+      <g>
+        <polygon class="st0" points="481.706,337.186 481.711,460.288 277.415,256 481.711,51.704 481.711,174.821 511.996,174.821 512,0 
+        337.175,0 337.175,30.294 460.292,30.294 256,234.588 51.704,30.294 174.817,30.294 174.817,0 0,0 0.004,174.821 30.289,174.821 
+        30.289,51.704 234.581,256 30.289,460.288 30.289,337.17 0.004,337.179 0,512 174.817,512 174.817,481.706 51.704,481.706 
+        256,277.419 460.292,481.706 337.175,481.706 337.175,512 512,512 511.996,337.179 " />
+      </g>
+    </svg>
+  `;
+  }
+  function createFullscreenExitIcon() {
+    return `
+    <svg version="1.1" id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 512 512" style="width: 32px; height: 32px; opacity: 1;" xml:space="preserve">
+      <style type="text/css">
+        .st0{fill:currentColor;}
+      </style>
+      <g>
+        <polygon class="st0" points="500.66,155.854 377.547,155.854 511.993,21.418 490.574,0.008 356.137,134.444 356.137,11.331 
+        325.844,11.339 325.844,186.147 500.66,186.147 " />
+        <polygon class="st0" points="377.547,356.129 500.66,356.129 500.66,325.844 325.844,325.837 325.844,500.653 356.137,500.668 
+        356.137,377.555 490.59,511.992 512,490.565 " />
+        <polygon class="st0" points="11.34,155.863 11.348,186.155 186.156,186.155 186.156,11.347 155.88,11.339 155.88,134.444 
+        21.434,0.008 0.016,21.426 134.453,155.863 " />
+        <polygon class="st0" points="11.355,325.837 11.355,356.121 134.453,356.121 0,490.565 21.442,511.984 155.871,377.539 
+        155.871,500.653 186.171,500.644 186.164,325.837 " />
+      </g>
+    </svg>
+  `;
+  }
   function saveSearchQuery(key, query) {
     try {
       sessionStorage.setItem(`${SEARCH_STORAGE_PREFIX}${key}`, query);
@@ -476,15 +510,10 @@
     nextBtn.className = "eds-search-nav";
     nextBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;";
     nextBtn.disabled = true;
-    const closeBtn = document.createElement("button");
-    closeBtn.innerHTML = "\u2715";
-    closeBtn.title = "Close search";
-    closeBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
     searchBar.appendChild(searchInput);
     searchBar.appendChild(searchInfo);
     searchBar.appendChild(prevBtn);
     searchBar.appendChild(nextBtn);
-    searchBar.appendChild(closeBtn);
     searchContainer.appendChild(searchBar);
     let matches = [];
     let currentMatchIndex = -1;
@@ -699,7 +728,6 @@
         saveSearchQuery(searchKey, "");
       }
     };
-    closeBtn.addEventListener("click", clearSearch);
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
@@ -719,7 +747,6 @@
     searchBar.appendChild(searchInfo);
     searchBar.appendChild(prevBtn);
     searchBar.appendChild(nextBtn);
-    searchBar.appendChild(closeBtn);
     searchContainer.appendChild(searchBar);
     if (searchKey) {
       const savedQuery = getSearchQuery(searchKey);
@@ -772,9 +799,9 @@
     const copyBtn = createCopyButton(rawContent, null, null);
     copyBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 12px; transition: all 0.2s;";
     const closeBtn = document.createElement("button");
-    closeBtn.innerHTML = "\u229F";
+    closeBtn.innerHTML = createFullscreenExitIcon();
     closeBtn.title = "Close (ESC)";
-    closeBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;";
+    closeBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
     closeBtn.addEventListener("click", () => {
       fullscreenContainer.remove();
       document.removeEventListener("keydown", handleEsc);
@@ -5183,12 +5210,12 @@
   });
 
   // src/panel/renderers/docs.js
-  function renderDocsContent(container, content, mode, tabId) {
+  function renderDocsContent(container, content, mode, tabId, docUrl = null) {
     container.innerHTML = "";
     const contentText = typeof content === "object" ? content.documents || content : content;
-    renderSingleDoc(container, contentText, mode, tabId);
+    renderSingleDoc(container, contentText, mode, tabId, false, docUrl);
   }
-  function renderSingleDoc(container, content, mode, tabId, isNested = false) {
+  function renderSingleDoc(container, content, mode, tabId, isNested = false, docUrl = null) {
     if (!isNested) {
       const existing = container.querySelector(".eds-docs-content");
       if (existing) existing.remove();
@@ -5196,30 +5223,44 @@
     const contentArea = document.createElement("div");
     contentArea.className = "eds-docs-content";
     contentArea.style.cssText = "padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;";
-    const headerBar = document.createElement("div");
-    headerBar.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end;";
-    const fullscreenBtn = document.createElement("button");
-    fullscreenBtn.innerHTML = "\u26F6";
-    fullscreenBtn.title = "Fullscreen view";
-    fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
-    fullscreenBtn.addEventListener("mouseenter", () => {
-      fullscreenBtn.style.opacity = "1";
-      fullscreenBtn.style.background = "var(--bg)";
-    });
-    fullscreenBtn.addEventListener("mouseleave", () => {
-      fullscreenBtn.style.opacity = "0.7";
-      fullscreenBtn.style.background = "transparent";
-    });
-    fullscreenBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const fileType = mode === "markdown" ? "markdown" : "html";
-      const processedCode = processCode(content, fileType, mode === "markdown" ? "Markdown" : "Markup");
-      const searchKey2 = `docs-${mode}-fullscreen-${Date.now()}`;
-      createFullscreenViewer(content, processedCode, mode === "markdown" ? "Markdown" : "Markup", searchKey2);
-    });
-    headerBar.appendChild(fullscreenBtn);
     const searchKey = `docs-${mode}-${Date.now()}`;
     const searchUI = createSearchUI(contentArea, content, searchKey);
+    const searchBar = searchUI.querySelector(".eds-search-container > div:first-child");
+    if (searchBar) {
+      const fullscreenBtn = document.createElement("button");
+      fullscreenBtn.innerHTML = createFullscreenEnterIcon();
+      fullscreenBtn.title = "Fullscreen view";
+      fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;";
+      fullscreenBtn.addEventListener("mouseenter", () => {
+        fullscreenBtn.style.opacity = "1";
+        fullscreenBtn.style.background = "var(--bg)";
+      });
+      fullscreenBtn.addEventListener("mouseleave", () => {
+        fullscreenBtn.style.opacity = "0.7";
+        fullscreenBtn.style.background = "transparent";
+      });
+      fullscreenBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const fileType = mode === "markdown" ? "markdown" : "html";
+        const processedCode = processCode(content, fileType, mode === "markdown" ? "Markdown" : "Markup");
+        let title = mode === "markdown" ? "Markdown" : "Markup";
+        if (docUrl) {
+          try {
+            const urlObj = new URL(docUrl);
+            let pathname = urlObj.pathname;
+            if (pathname === "/" || pathname === "") {
+              pathname = "/";
+            }
+            title = `${pathname} - ${title}`;
+          } catch (e2) {
+            title = `${docUrl} - ${title}`;
+          }
+        }
+        const fullscreenSearchKey = `docs-${mode}-fullscreen-${Date.now()}`;
+        createFullscreenViewer(content, processedCode, title, fullscreenSearchKey);
+      });
+      searchBar.appendChild(fullscreenBtn);
+    }
     const codeContainer = document.createElement("div");
     codeContainer.style.cssText = "padding: 16px;";
     const sourcePre = document.createElement("pre");
@@ -5236,7 +5277,6 @@
     codeContainer.appendChild(sourcePre);
     contentArea.appendChild(searchUI);
     contentArea.appendChild(codeContainer);
-    container.appendChild(headerBar);
     container.appendChild(contentArea);
   }
   function createModeToggle(root, tabId) {
@@ -5415,7 +5455,7 @@
           content = await response.text();
         }
       }
-      renderDocsContent(contentArea, content, currentMode, tabId);
+      renderDocsContent(contentArea, content, currentMode, tabId, url);
     } catch (err) {
       console.error("[EDS Inspector Panel] Error loading doc:", err);
       contentArea.innerHTML = `<p class="eds-empty">Error loading documentation: ${err.message}</p>`;
@@ -5793,9 +5833,9 @@
     ssrHeaderLeft.appendChild(ssrTitle);
     ssrHeaderLeft.appendChild(ssrDocInfo);
     const ssrFullscreenBtn = document.createElement("button");
-    ssrFullscreenBtn.innerHTML = "\u26F6";
+    ssrFullscreenBtn.innerHTML = createFullscreenEnterIcon();
     ssrFullscreenBtn.title = "Fullscreen view";
-    ssrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    ssrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
     ssrFullscreenBtn.addEventListener("mouseenter", () => {
       ssrFullscreenBtn.style.opacity = "1";
       ssrFullscreenBtn.style.background = "var(--bg)";
@@ -5808,7 +5848,8 @@
       e.stopPropagation();
       if (ssrMarkupContent) {
         const processedCode = processCode(ssrMarkupContent, "html", "Markup (SSR)");
-        createFullscreenViewer(ssrMarkupContent, processedCode, "Markup (SSR)", `markup-ssr-fullscreen-${detail.block.id}`);
+        const title = `${detail.block.name} - Markup (SSR)`;
+        createFullscreenViewer(ssrMarkupContent, processedCode, title, `markup-ssr-fullscreen-${detail.block.id}`);
       }
     });
     ssrHeader.appendChild(ssrHeaderLeft);
@@ -5850,9 +5891,9 @@
     csrHeaderLeft.appendChild(csrTitle);
     csrHeaderLeft.appendChild(csrSpacer);
     const csrFullscreenBtn = document.createElement("button");
-    csrFullscreenBtn.innerHTML = "\u26F6";
+    csrFullscreenBtn.innerHTML = createFullscreenEnterIcon();
     csrFullscreenBtn.title = "Fullscreen view";
-    csrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    csrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
     csrFullscreenBtn.addEventListener("mouseenter", () => {
       csrFullscreenBtn.style.opacity = "1";
       csrFullscreenBtn.style.background = "var(--bg)";
@@ -5865,7 +5906,8 @@
       e.stopPropagation();
       if (csrMarkupContent && csrMarkupContent !== "No markup captured for this block.") {
         const processedCode = processCode(csrMarkupContent, "html", "Markup (CSR)");
-        createFullscreenViewer(csrMarkupContent, processedCode, "Markup (CSR)", `markup-csr-fullscreen-${detail.block.id}`);
+        const title = `${detail.block.name} - Markup (CSR)`;
+        createFullscreenViewer(csrMarkupContent, processedCode, title, `markup-csr-fullscreen-${detail.block.id}`);
       }
     });
     csrHeader.appendChild(csrHeaderLeft);
@@ -6017,9 +6059,9 @@
       rightSection.appendChild(pill);
     }
     const fullscreenBtn = document.createElement("button");
-    fullscreenBtn.innerHTML = "\u26F6";
+    fullscreenBtn.innerHTML = createFullscreenEnterIcon();
     fullscreenBtn.title = "Fullscreen view";
-    fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
     fullscreenBtn.addEventListener("mouseenter", () => {
       fullscreenBtn.style.opacity = "1";
       fullscreenBtn.style.background = "var(--bg)";
@@ -6309,9 +6351,9 @@
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
               const fullscreenBtn = document.createElement("button");
-              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.innerHTML = createFullscreenEnterIcon();
               fullscreenBtn.title = "Fullscreen view";
-              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
               fullscreenBtn.addEventListener("mouseenter", () => {
                 fullscreenBtn.style.opacity = "1";
                 fullscreenBtn.style.background = "var(--bg)";
@@ -6369,9 +6411,9 @@
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
               const fullscreenBtn = document.createElement("button");
-              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.innerHTML = createFullscreenEnterIcon();
               fullscreenBtn.title = "Fullscreen view";
-              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
               fullscreenBtn.addEventListener("mouseenter", () => {
                 fullscreenBtn.style.opacity = "1";
                 fullscreenBtn.style.background = "var(--bg)";
@@ -6577,9 +6619,9 @@
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
               const fullscreenBtn = document.createElement("button");
-              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.innerHTML = createFullscreenEnterIcon();
               fullscreenBtn.title = "Fullscreen view";
-              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
               fullscreenBtn.addEventListener("mouseenter", () => {
                 fullscreenBtn.style.opacity = "1";
                 fullscreenBtn.style.background = "var(--bg)";
@@ -6638,9 +6680,9 @@
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
               const fullscreenBtn = document.createElement("button");
-              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.innerHTML = createFullscreenEnterIcon();
               fullscreenBtn.title = "Fullscreen view";
-              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;";
               fullscreenBtn.addEventListener("mouseenter", () => {
                 fullscreenBtn.style.opacity = "1";
                 fullscreenBtn.style.background = "var(--bg)";

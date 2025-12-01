@@ -1,5 +1,5 @@
 import { getMarkdownUrl } from '../../utils/url.js';
-import { createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
+import { createSearchUI, createFullscreenViewer, createFullscreenEnterIcon } from '../utils/file-utils.js';
 import { sendToContent, highlightCode } from '../utils.js';
 import { processCode } from '../utils/code-processor.js';
 
@@ -26,18 +26,18 @@ let currentSelectedDocUrl = null;
 /**
  * Docsコンテンツをレンダリング
  */
-function renderDocsContent(container, content, mode, tabId) {
+function renderDocsContent(container, content, mode, tabId, docUrl = null) {
   container.innerHTML = '';
   
   // 単一ドキュメントの表示
   const contentText = typeof content === 'object' ? content.documents || content : content;
-  renderSingleDoc(container, contentText, mode, tabId);
+  renderSingleDoc(container, contentText, mode, tabId, false, docUrl);
 }
 
 /**
  * 単一のドキュメントをレンダリング
  */
-function renderSingleDoc(container, content, mode, tabId, isNested = false) {
+function renderSingleDoc(container, content, mode, tabId, isNested = false, docUrl = null) {
   // 既存のコンテンツエリアを削除（ネストされていない場合）
   if (!isNested) {
     const existing = container.querySelector('.eds-docs-content');
@@ -49,36 +49,52 @@ function renderSingleDoc(container, content, mode, tabId, isNested = false) {
   contentArea.className = 'eds-docs-content';
   contentArea.style.cssText = 'padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;';
   
-  // ヘッダーを作成（全画面表示ボタン用）
-  const headerBar = document.createElement('div');
-  headerBar.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end;';
-  
-  // 全画面表示ボタンを追加
-  const fullscreenBtn = document.createElement('button');
-  fullscreenBtn.innerHTML = '⛶';
-  fullscreenBtn.title = 'Fullscreen view';
-  fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
-  fullscreenBtn.addEventListener('mouseenter', () => {
-    fullscreenBtn.style.opacity = '1';
-    fullscreenBtn.style.background = 'var(--bg)';
-  });
-  fullscreenBtn.addEventListener('mouseleave', () => {
-    fullscreenBtn.style.opacity = '0.7';
-    fullscreenBtn.style.background = 'transparent';
-  });
-  fullscreenBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const fileType = mode === 'markdown' ? 'markdown' : 'html';
-    const processedCode = processCode(content, fileType, mode === 'markdown' ? 'Markdown' : 'Markup');
-    const searchKey = `docs-${mode}-fullscreen-${Date.now()}`;
-    createFullscreenViewer(content, processedCode, mode === 'markdown' ? 'Markdown' : 'Markup', searchKey);
-  });
-  headerBar.appendChild(fullscreenBtn);
-  
   // 検索キーを生成（モードを含める）
   const searchKey = `docs-${mode}-${Date.now()}`;
   // 検索UIを追加
   const searchUI = createSearchUI(contentArea, content, searchKey);
+  
+  // 全画面表示ボタンを検索UIの右側に追加
+  const searchBar = searchUI.querySelector('.eds-search-container > div:first-child');
+  if (searchBar) {
+    const fullscreenBtn = document.createElement('button');
+    fullscreenBtn.innerHTML = createFullscreenEnterIcon();
+    fullscreenBtn.title = 'Fullscreen view';
+    fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;';
+    fullscreenBtn.addEventListener('mouseenter', () => {
+      fullscreenBtn.style.opacity = '1';
+      fullscreenBtn.style.background = 'var(--bg)';
+    });
+    fullscreenBtn.addEventListener('mouseleave', () => {
+      fullscreenBtn.style.opacity = '0.7';
+      fullscreenBtn.style.background = 'transparent';
+    });
+    fullscreenBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fileType = mode === 'markdown' ? 'markdown' : 'html';
+      const processedCode = processCode(content, fileType, mode === 'markdown' ? 'Markdown' : 'Markup');
+      
+      // タイトルにURL情報を追加
+      let title = mode === 'markdown' ? 'Markdown' : 'Markup';
+      if (docUrl) {
+        try {
+          const urlObj = new URL(docUrl);
+          let pathname = urlObj.pathname;
+          if (pathname === '/' || pathname === '') {
+            pathname = '/';
+          }
+          title = `${pathname} - ${title}`;
+        } catch (e) {
+          // URL解析に失敗した場合はそのまま使用
+          title = `${docUrl} - ${title}`;
+        }
+      }
+      
+      const fullscreenSearchKey = `docs-${mode}-fullscreen-${Date.now()}`;
+      createFullscreenViewer(content, processedCode, title, fullscreenSearchKey);
+    });
+    searchBar.appendChild(fullscreenBtn);
+  }
   
   // コードコンテナを作成
   const codeContainer = document.createElement('div');
@@ -101,7 +117,6 @@ function renderSingleDoc(container, content, mode, tabId, isNested = false) {
   codeContainer.appendChild(sourcePre);
   contentArea.appendChild(searchUI);
   contentArea.appendChild(codeContainer);
-  container.appendChild(headerBar);
   container.appendChild(contentArea);
 }
 
@@ -408,7 +423,7 @@ async function loadAndRenderDoc(url, tabId) {
     }
     
     // コンテンツをレンダリング
-    renderDocsContent(contentArea, content, currentMode, tabId);
+    renderDocsContent(contentArea, content, currentMode, tabId, url);
   } catch (err) {
     console.error('[EDS Inspector Panel] Error loading doc:', err);
     contentArea.innerHTML = `<p class="eds-empty">Error loading documentation: ${err.message}</p>`;

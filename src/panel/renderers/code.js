@@ -2,7 +2,7 @@
  * Scriptsタブのレンダラー
  */
 import { highlightCode } from '../utils.js';
-import { createCopyButton, createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
+import { createCopyButton, createSearchUI, createFullscreenViewer, createFullscreenEnterIcon } from '../utils/file-utils.js';
 
 /**
  * Scriptsタブをレンダリング
@@ -145,9 +145,9 @@ export function renderScripts(state) {
             
             // 全画面表示ボタンを追加
             const fullscreenBtn = document.createElement('button');
-            fullscreenBtn.innerHTML = '⛶';
+            fullscreenBtn.innerHTML = createFullscreenEnterIcon();
             fullscreenBtn.title = 'Fullscreen view';
-            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
+            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
             fullscreenBtn.addEventListener('mouseenter', () => {
               fullscreenBtn.style.opacity = '1';
               fullscreenBtn.style.background = 'var(--bg)';
@@ -219,9 +219,9 @@ export function renderScripts(state) {
             
             // 全画面表示ボタンを追加
             const fullscreenBtn = document.createElement('button');
-            fullscreenBtn.innerHTML = '⛶';
+            fullscreenBtn.innerHTML = createFullscreenEnterIcon();
             fullscreenBtn.title = 'Fullscreen view';
-            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
+            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
             fullscreenBtn.addEventListener('mouseenter', () => {
               fullscreenBtn.style.opacity = '1';
               fullscreenBtn.style.background = 'var(--bg)';

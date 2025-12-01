@@ -6,6 +6,48 @@
 const SEARCH_STORAGE_PREFIX = 'eds-search-';
 
 /**
+ * 全画面表示を開くアイコン（4つの矢印が外側に向かう）を生成
+ */
+export function createFullscreenEnterIcon() {
+  return `
+    <svg version="1.1" id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 512 512" style="width: 32px; height: 32px; opacity: 1;" xml:space="preserve">
+      <style type="text/css">
+        .st0{fill:currentColor;}
+      </style>
+      <g>
+        <polygon class="st0" points="481.706,337.186 481.711,460.288 277.415,256 481.711,51.704 481.711,174.821 511.996,174.821 512,0 
+        337.175,0 337.175,30.294 460.292,30.294 256,234.588 51.704,30.294 174.817,30.294 174.817,0 0,0 0.004,174.821 30.289,174.821 
+        30.289,51.704 234.581,256 30.289,460.288 30.289,337.17 0.004,337.179 0,512 174.817,512 174.817,481.706 51.704,481.706 
+        256,277.419 460.292,481.706 337.175,481.706 337.175,512 512,512 511.996,337.179 " />
+      </g>
+    </svg>
+  `;
+}
+
+/**
+ * 全画面表示を閉じるアイコン（4つの矢印が中央に向かう）を生成
+ */
+export function createFullscreenExitIcon() {
+  return `
+    <svg version="1.1" id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 512 512" style="width: 32px; height: 32px; opacity: 1;" xml:space="preserve">
+      <style type="text/css">
+        .st0{fill:currentColor;}
+      </style>
+      <g>
+        <polygon class="st0" points="500.66,155.854 377.547,155.854 511.993,21.418 490.574,0.008 356.137,134.444 356.137,11.331 
+        325.844,11.339 325.844,186.147 500.66,186.147 " />
+        <polygon class="st0" points="377.547,356.129 500.66,356.129 500.66,325.844 325.844,325.837 325.844,500.653 356.137,500.668 
+        356.137,377.555 490.59,511.992 512,490.565 " />
+        <polygon class="st0" points="11.34,155.863 11.348,186.155 186.156,186.155 186.156,11.347 155.88,11.339 155.88,134.444 
+        21.434,0.008 0.016,21.426 134.453,155.863 " />
+        <polygon class="st0" points="11.355,325.837 11.355,356.121 134.453,356.121 0,490.565 21.442,511.984 155.871,377.539 
+        155.871,500.653 186.171,500.644 186.164,325.837 " />
+      </g>
+    </svg>
+  `;
+}
+
+/**
  * 検索ワードを保存
  */
 function saveSearchQuery(key, query) {
@@ -188,16 +230,10 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   nextBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 12px; color: var(--text); transition: all 0.2s;';
   nextBtn.disabled = true;
   
-  const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '✕';
-  closeBtn.title = 'Close search';
-  closeBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
-  
   searchBar.appendChild(searchInput);
   searchBar.appendChild(searchInfo);
   searchBar.appendChild(prevBtn);
   searchBar.appendChild(nextBtn);
-  searchBar.appendChild(closeBtn);
   searchContainer.appendChild(searchBar);
   
   let matches = [];
@@ -476,8 +512,6 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
     }
   };
   
-  closeBtn.addEventListener('click', clearSearch);
-  
   // Ctrl+F / Cmd+Fで検索入力欄にフォーカス
   const handleKeyDown = (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -503,7 +537,6 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   searchBar.appendChild(searchInfo);
   searchBar.appendChild(prevBtn);
   searchBar.appendChild(nextBtn);
-  searchBar.appendChild(closeBtn);
   searchContainer.appendChild(searchBar);
   
   // 保存された検索ワードがある場合は、初期表示時に検索を実行
@@ -581,9 +614,9 @@ export function createFullscreenViewer(rawContent, processedHtml, title, searchK
   
   // 閉じるボタン（領域を小さくするニュアンスのアイコン）
   const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '⊟';
+  closeBtn.innerHTML = createFullscreenExitIcon();
   closeBtn.title = 'Close (ESC)';
-  closeBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;';
+  closeBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
   closeBtn.addEventListener('click', () => {
     fullscreenContainer.remove();
     document.removeEventListener('keydown', handleEsc);

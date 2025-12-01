@@ -3,7 +3,7 @@
  */
 import { sendToContent } from '../utils.js';
 import { processCode } from '../utils/code-processor.js';
-import { createCopyButton as createCopyButtonUtil, createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
+import { createCopyButton as createCopyButtonUtil, createSearchUI, createFullscreenViewer, createFullscreenEnterIcon } from '../utils/file-utils.js';
 
 /**
  * ブロック詳細をレンダリング（開閉状態を保持）
@@ -176,9 +176,9 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   
   // SSR全画面表示ボタン
   const ssrFullscreenBtn = document.createElement('button');
-  ssrFullscreenBtn.innerHTML = '⛶';
+  ssrFullscreenBtn.innerHTML = createFullscreenEnterIcon();
   ssrFullscreenBtn.title = 'Fullscreen view';
-  ssrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  ssrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
   ssrFullscreenBtn.addEventListener('mouseenter', () => {
     ssrFullscreenBtn.style.opacity = '1';
     ssrFullscreenBtn.style.background = 'var(--bg)';
@@ -191,7 +191,8 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
     e.stopPropagation();
     if (ssrMarkupContent) {
       const processedCode = processCode(ssrMarkupContent, 'html', 'Markup (SSR)');
-      createFullscreenViewer(ssrMarkupContent, processedCode, 'Markup (SSR)', `markup-ssr-fullscreen-${detail.block.id}`);
+      const title = `${detail.block.name} - Markup (SSR)`;
+      createFullscreenViewer(ssrMarkupContent, processedCode, title, `markup-ssr-fullscreen-${detail.block.id}`);
     }
   });
   
@@ -251,9 +252,9 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   
   // CSR全画面表示ボタン
   const csrFullscreenBtn = document.createElement('button');
-  csrFullscreenBtn.innerHTML = '⛶';
+  csrFullscreenBtn.innerHTML = createFullscreenEnterIcon();
   csrFullscreenBtn.title = 'Fullscreen view';
-  csrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  csrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
   csrFullscreenBtn.addEventListener('mouseenter', () => {
     csrFullscreenBtn.style.opacity = '1';
     csrFullscreenBtn.style.background = 'var(--bg)';
@@ -266,7 +267,8 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
     e.stopPropagation();
     if (csrMarkupContent && csrMarkupContent !== 'No markup captured for this block.') {
       const processedCode = processCode(csrMarkupContent, 'html', 'Markup (CSR)');
-      createFullscreenViewer(csrMarkupContent, processedCode, 'Markup (CSR)', `markup-csr-fullscreen-${detail.block.id}`);
+      const title = `${detail.block.name} - Markup (CSR)`;
+      createFullscreenViewer(csrMarkupContent, processedCode, title, `markup-csr-fullscreen-${detail.block.id}`);
     }
   });
   
@@ -464,9 +466,9 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
   
   // 全画面表示ボタンを追加
   const fullscreenBtn = document.createElement('button');
-  fullscreenBtn.innerHTML = '⛶';
+  fullscreenBtn.innerHTML = createFullscreenEnterIcon();
   fullscreenBtn.title = 'Fullscreen view';
-  fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;';
   fullscreenBtn.addEventListener('mouseenter', () => {
     fullscreenBtn.style.opacity = '1';
     fullscreenBtn.style.background = 'var(--bg)';
