@@ -5630,11 +5630,13 @@
     markupContent.appendChild(ssrContainer);
     markupContent.appendChild(csrContainer);
     const wasMarkupExpanded = expandedPaths.has("markup-section");
-    if (!expandedPaths.has("markup-section")) {
-      expandedPaths.add("markup-section");
+    if (wasMarkupExpanded) {
+      markupContent.style.display = "grid";
+      markupToggle.textContent = "\u25BC";
+    } else {
+      markupContent.style.display = "none";
+      markupToggle.textContent = "\u25B6";
     }
-    markupContent.style.display = "grid";
-    markupToggle.textContent = "\u25BC";
     markupHeader.addEventListener("click", () => {
       const isExpanded = markupContent.style.display !== "none";
       if (isExpanded) {
@@ -5812,6 +5814,9 @@
     state.blocks.forEach((block) => {
       const category = block.category || "block";
       if (defaultContentCategories.includes(category)) {
+        return;
+      }
+      if (block.name === "section") {
         return;
       }
       if (!blocksByCategory[category]) {

@@ -25,6 +25,10 @@ export function renderBlocks(state, refresh, tabId) {
     if (defaultContentCategories.includes(category)) {
       return;
     }
+    // sectionはBlocksタブに表示しない（SectionはBlockとは異なる特殊な概念）
+    if (block.name === 'section') {
+      return;
+    }
     if (!blocksByCategory[category]) {
       blocksByCategory[category] = [];
     }

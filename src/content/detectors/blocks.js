@@ -104,6 +104,8 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
   blockResources.forEach((blockName) => {
     // iconはBlockとして検出しない（Iconsタブで別途表示）
     if (blockName === 'icon' || blockName.startsWith('icon-')) return;
+    // sectionはBlockとして検出しない（SectionはBlockとは異なる特殊な概念）
+    if (blockName === 'section') return;
     
     // ライブDOMでブロック要素を検索
     let liveElements = [];
@@ -166,39 +168,71 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
         let ssrElement = null;
         if (mainSSR) {
           try {
-            // まず、ブロック名で直接検索する方法を優先（より確実）
-            // headerとfooterはタグ名で検索、それ以外はクラス名で検索
-            let allLiveElements = [];
-            if (blockName === 'header' || blockName === 'footer') {
-              allLiveElements = Array.from(document.querySelectorAll(blockName));
-            } else {
-              allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
-            }
-            
-            const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
-            
-            // すべてのSSRドキュメントを検索
-            if (liveIndex >= 0) {
-              for (const [url, ssrDoc] of ssrDocuments.entries()) {
-                let allSSRElements = [];
-                if (blockName === 'header' || blockName === 'footer') {
-                  allSSRElements = Array.from(ssrDoc.querySelectorAll(blockName));
-                } else {
-                  allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
+            // fragment ブロックの特別な処理
+            if (blockName === 'fragment') {
+              // CSR側の data-path 属性を取得
+              const dataPath = liveElement.getAttribute('data-path');
+              if (dataPath) {
+                // SSR側で /fragments/ へのリンクを持つ <a> タグを検索
+                for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                  const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
+                  // /fragments/ へのリンクを持つ <a> タグを検索
+                  const fragmentLinks = Array.from(mainSSRInDoc.querySelectorAll('a[href*="/fragments/"]'));
+                  
+                  // data-path の値と href の値でマッピング
+                  const matchingLink = fragmentLinks.find(link => {
+                    const href = link.getAttribute('href');
+                    if (!href) return false;
+                    // href から /fragments/ 以降のパスを抽出
+                    const fragmentsMatch = href.match(/\/fragments\/(.+)/);
+                    if (!fragmentsMatch) return false;
+                    const fragmentPath = '/fragments/' + fragmentsMatch[1].split(/[?#]/)[0]; // クエリパラメータやフラグメントを除去
+                    return fragmentPath === dataPath;
+                  });
+                  
+                  if (matchingLink) {
+                    // <a> タグの親要素（通常は <p>）を SSR 要素として使用
+                    ssrElement = matchingLink.parentElement;
+                    console.log('[EDS Inspector] Found fragment SSR element for', dataPath, 'in', url, ssrElement, 'tag:', ssrElement.tagName.toLowerCase());
+                    break;
+                  }
                 }
-                
-                console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
-                  allSSRElementsCount: allSSRElements.length,
-                  allLiveElementsCount: allLiveElements.length,
-                  liveIndex,
-                  isOutsideMain: !mainLive.contains(liveElement),
-                  liveElementTag: liveElement.tagName.toLowerCase()
-                });
-                
-                if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
-                  ssrElement = allSSRElements[liveIndex];
-                  console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, ssrElement, 'tag:', ssrElement.tagName.toLowerCase());
-                  break;
+              }
+            } else {
+              // 通常のブロック: まず、ブロック名で直接検索する方法を優先（より確実）
+              // headerとfooterはタグ名で検索、それ以外はクラス名で検索
+              let allLiveElements = [];
+              if (blockName === 'header' || blockName === 'footer') {
+                allLiveElements = Array.from(document.querySelectorAll(blockName));
+              } else {
+                allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
+              }
+              
+              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+              
+              // すべてのSSRドキュメントを検索
+              if (liveIndex >= 0) {
+                for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                  let allSSRElements = [];
+                  if (blockName === 'header' || blockName === 'footer') {
+                    allSSRElements = Array.from(ssrDoc.querySelectorAll(blockName));
+                  } else {
+                    allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
+                  }
+                  
+                  console.log('[EDS Inspector] Searching SSR element for', blockName, 'in', url, {
+                    allSSRElementsCount: allSSRElements.length,
+                    allLiveElementsCount: allLiveElements.length,
+                    liveIndex,
+                    isOutsideMain: !mainLive.contains(liveElement),
+                    liveElementTag: liveElement.tagName.toLowerCase()
+                  });
+                  
+                  if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
+                    ssrElement = allSSRElements[liveIndex];
+                    console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, ssrElement, 'tag:', ssrElement.tagName.toLowerCase());
+                    break;
+                  }
                 }
               }
             }
@@ -316,6 +350,8 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
     
     // iconはBlockとして検出しない（Iconsタブで別途表示）
     if (blockName === 'icon' || blockName.startsWith('icon-')) return;
+    // sectionはBlockとして検出しない（SectionはBlockとは異なる特殊な概念）
+    if (blockName === 'section') return;
     
     try {
       // main要素内を先に検索

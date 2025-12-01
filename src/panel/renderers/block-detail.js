@@ -254,14 +254,16 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   markupContent.appendChild(ssrContainer);
   markupContent.appendChild(csrContainer);
   
-  // 開閉状態を管理（デフォルトで開いた状態）
+  // 開閉状態を管理（デフォルトで閉じた状態）
   const wasMarkupExpanded = expandedPaths.has('markup-section');
-  // デフォルトで開いた状態にする（expandedPathsにない場合は開く）
-  if (!expandedPaths.has('markup-section')) {
-    expandedPaths.add('markup-section');
+  // デフォルトで閉じた状態にする（expandedPathsにある場合のみ開く）
+  if (wasMarkupExpanded) {
+    markupContent.style.display = 'grid';
+    markupToggle.textContent = '▼';
+  } else {
+    markupContent.style.display = 'none';
+    markupToggle.textContent = '▶';
   }
-  markupContent.style.display = 'grid';
-  markupToggle.textContent = '▼';
   
   markupHeader.addEventListener('click', () => {
     const isExpanded = markupContent.style.display !== 'none';

@@ -828,6 +828,7 @@
   function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResources, blocks, seenElements) {
     blockResources.forEach((blockName) => {
       if (blockName === "icon" || blockName.startsWith("icon-")) return;
+      if (blockName === "section") return;
       let liveElements = [];
       try {
         if (blockName === "header" || blockName === "footer") {
@@ -864,32 +865,55 @@
           let ssrElement = null;
           if (mainSSR) {
             try {
-              let allLiveElements = [];
-              if (blockName === "header" || blockName === "footer") {
-                allLiveElements = Array.from(document.querySelectorAll(blockName));
-              } else {
-                allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
-              }
-              const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
-              if (liveIndex >= 0) {
-                for (const [url, ssrDoc] of ssrDocuments.entries()) {
-                  let allSSRElements = [];
-                  if (blockName === "header" || blockName === "footer") {
-                    allSSRElements = Array.from(ssrDoc.querySelectorAll(blockName));
-                  } else {
-                    allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
+              if (blockName === "fragment") {
+                const dataPath = liveElement.getAttribute("data-path");
+                if (dataPath) {
+                  for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                    const mainSSRInDoc = ssrDoc.querySelector("main") || ssrDoc;
+                    const fragmentLinks = Array.from(mainSSRInDoc.querySelectorAll('a[href*="/fragments/"]'));
+                    const matchingLink = fragmentLinks.find((link) => {
+                      const href = link.getAttribute("href");
+                      if (!href) return false;
+                      const fragmentsMatch = href.match(/\/fragments\/(.+)/);
+                      if (!fragmentsMatch) return false;
+                      const fragmentPath = "/fragments/" + fragmentsMatch[1].split(/[?#]/)[0];
+                      return fragmentPath === dataPath;
+                    });
+                    if (matchingLink) {
+                      ssrElement = matchingLink.parentElement;
+                      console.log("[EDS Inspector] Found fragment SSR element for", dataPath, "in", url, ssrElement, "tag:", ssrElement.tagName.toLowerCase());
+                      break;
+                    }
                   }
-                  console.log("[EDS Inspector] Searching SSR element for", blockName, "in", url, {
-                    allSSRElementsCount: allSSRElements.length,
-                    allLiveElementsCount: allLiveElements.length,
-                    liveIndex,
-                    isOutsideMain: !mainLive.contains(liveElement),
-                    liveElementTag: liveElement.tagName.toLowerCase()
-                  });
-                  if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
-                    ssrElement = allSSRElements[liveIndex];
-                    console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, ssrElement, "tag:", ssrElement.tagName.toLowerCase());
-                    break;
+                }
+              } else {
+                let allLiveElements = [];
+                if (blockName === "header" || blockName === "footer") {
+                  allLiveElements = Array.from(document.querySelectorAll(blockName));
+                } else {
+                  allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
+                }
+                const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
+                if (liveIndex >= 0) {
+                  for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                    let allSSRElements = [];
+                    if (blockName === "header" || blockName === "footer") {
+                      allSSRElements = Array.from(ssrDoc.querySelectorAll(blockName));
+                    } else {
+                      allSSRElements = Array.from(ssrDoc.querySelectorAll(`.${escapeCSS(blockName)}`));
+                    }
+                    console.log("[EDS Inspector] Searching SSR element for", blockName, "in", url, {
+                      allSSRElementsCount: allSSRElements.length,
+                      allLiveElementsCount: allLiveElements.length,
+                      liveIndex,
+                      isOutsideMain: !mainLive.contains(liveElement),
+                      liveElementTag: liveElement.tagName.toLowerCase()
+                    });
+                    if (liveIndex >= 0 && liveIndex < allSSRElements.length) {
+                      ssrElement = allSSRElements[liveIndex];
+                      console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, ssrElement, "tag:", ssrElement.tagName.toLowerCase());
+                      break;
+                    }
                   }
                 }
               }
@@ -977,6 +1001,7 @@
     ssrBlockClasses.forEach((blockName) => {
       if (blockResources.has(blockName)) return;
       if (blockName === "icon" || blockName.startsWith("icon-")) return;
+      if (blockName === "section") return;
       try {
         let liveElements = Array.from(mainLive.querySelectorAll(`.${escapeCSS(blockName)}`));
         if (liveElements.length === 0) {
