@@ -732,406 +732,105 @@
     }
     return searchContainer;
   }
+  function createFullscreenViewer(rawContent, processedHtml, title, searchKey = null) {
+    const existing = document.querySelector(".eds-fullscreen-viewer");
+    if (existing) {
+      existing.remove();
+    }
+    const fullscreenContainer = document.createElement("div");
+    fullscreenContainer.className = "eds-fullscreen-viewer";
+    fullscreenContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.2s ease;
+  `;
+    const header = document.createElement("div");
+    header.style.cssText = `
+    padding: 12px 16px;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  `;
+    const headerLeft = document.createElement("div");
+    headerLeft.style.cssText = "display: flex; align-items: center; gap: 12px;";
+    const titleElement = document.createElement("div");
+    titleElement.textContent = title;
+    titleElement.style.cssText = "font-weight: 600; color: var(--text); font-size: 14px;";
+    headerLeft.appendChild(titleElement);
+    const headerRight = document.createElement("div");
+    headerRight.style.cssText = "display: flex; align-items: center; gap: 8px;";
+    const copyBtn = createCopyButton(rawContent, null, null);
+    copyBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 12px; transition: all 0.2s;";
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "\u2715";
+    closeBtn.title = "Close (ESC)";
+    closeBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;";
+    closeBtn.addEventListener("click", () => {
+      fullscreenContainer.remove();
+      document.removeEventListener("keydown", handleEsc);
+    });
+    headerRight.appendChild(copyBtn);
+    headerRight.appendChild(closeBtn);
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    const contentArea = document.createElement("div");
+    contentArea.style.cssText = `
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    padding: 0;
+  `;
+    const searchUI = createSearchUI(contentArea, rawContent, searchKey);
+    const codeContainer = document.createElement("div");
+    codeContainer.style.cssText = "padding: 16px;";
+    const pre = document.createElement("pre");
+    pre.className = "eds-code";
+    pre.style.cssText = "background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;";
+    const code = document.createElement("code");
+    code.innerHTML = processedHtml;
+    code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
+    pre.appendChild(code);
+    codeContainer.appendChild(pre);
+    contentArea.appendChild(searchUI);
+    contentArea.appendChild(codeContainer);
+    fullscreenContainer.appendChild(header);
+    fullscreenContainer.appendChild(contentArea);
+    const handleEsc = (e) => {
+      if (e.key === "Escape") {
+        fullscreenContainer.remove();
+        document.removeEventListener("keydown", handleEsc);
+      }
+    };
+    document.addEventListener("keydown", handleEsc);
+    if (!document.querySelector("#eds-fullscreen-styles")) {
+      const style = document.createElement("style");
+      style.id = "eds-fullscreen-styles";
+      style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+    `;
+      document.head.appendChild(style);
+    }
+    const panelRoot = document.querySelector("[data-tab-panel]")?.closest("main") || document.body;
+    panelRoot.appendChild(fullscreenContainer);
+    return fullscreenContainer;
+  }
   var SEARCH_STORAGE_PREFIX;
   var init_file_utils = __esm({
     "src/panel/utils/file-utils.js"() {
       SEARCH_STORAGE_PREFIX = "eds-search-";
-    }
-  });
-
-  // src/panel/renderers/docs.js
-  function renderDocsContent(container, content, mode, tabId) {
-    container.innerHTML = "";
-    const contentText = typeof content === "object" ? content.documents || content : content;
-    renderSingleDoc(container, contentText, mode, tabId);
-  }
-  function renderSingleDoc(container, content, mode, tabId, isNested = false) {
-    if (!isNested) {
-      const existing = container.querySelector(".eds-docs-content");
-      if (existing) existing.remove();
-    }
-    const contentArea = document.createElement("div");
-    contentArea.className = "eds-docs-content";
-    contentArea.style.cssText = "padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;";
-    const searchKey = `docs-${mode}-${Date.now()}`;
-    const searchUI = createSearchUI(contentArea, content, searchKey);
-    const codeContainer = document.createElement("div");
-    codeContainer.style.cssText = "padding: 16px;";
-    const sourcePre = document.createElement("pre");
-    sourcePre.className = "eds-code";
-    sourcePre.style.cssText = "background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;";
-    const sourceCode = document.createElement("code");
-    sourceCode.textContent = content;
-    sourceCode.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
-    sourcePre.appendChild(sourceCode);
-    codeContainer.appendChild(sourcePre);
-    contentArea.appendChild(searchUI);
-    contentArea.appendChild(codeContainer);
-    container.appendChild(contentArea);
-  }
-  function createModeToggle(root, tabId) {
-    const toggleContainer = document.createElement("div");
-    toggleContainer.style.cssText = "display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);";
-    const label = document.createElement("span");
-    label.textContent = "View:";
-    label.style.cssText = "font-size: 12px; color: var(--text-muted); font-weight: 500;";
-    const switchContainer = document.createElement("div");
-    switchContainer.style.cssText = "position: relative; display: inline-flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; cursor: pointer; transition: all 0.2s ease;";
-    const buttonsContainer = document.createElement("div");
-    buttonsContainer.style.cssText = "position: relative; display: flex; z-index: 1;";
-    const markupBtn = document.createElement("button");
-    markupBtn.textContent = "Markup";
-    markupBtn.className = "eds-mode-toggle-btn";
-    markupBtn.style.cssText = "padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;";
-    const markdownBtn = document.createElement("button");
-    markdownBtn.textContent = "Markdown";
-    markdownBtn.className = "eds-mode-toggle-btn";
-    markdownBtn.style.cssText = "padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;";
-    const slider = document.createElement("div");
-    slider.style.cssText = "position: absolute; top: 2px; left: 2px; height: calc(100% - 4px); background: #6366f1; border-radius: 6px; transition: all 0.2s ease; z-index: 0;";
-    const updateSwitch = () => {
-      const markupWidth = markupBtn.offsetWidth;
-      const markdownWidth = markdownBtn.offsetWidth;
-      if (currentMode === "markup") {
-        slider.style.width = `${markupWidth}px`;
-        slider.style.transform = "translateX(0)";
-        markupBtn.style.color = "white";
-        markdownBtn.style.color = "var(--text)";
-      } else {
-        slider.style.width = `${markdownWidth}px`;
-        slider.style.transform = `translateX(${markupWidth}px)`;
-        markupBtn.style.color = "var(--text)";
-        markdownBtn.style.color = "white";
-      }
-    };
-    setTimeout(() => {
-      updateSwitch();
-    }, 0);
-    markupBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (currentMode === "markup") return;
-      currentMode = "markup";
-      updateSwitch();
-      await renderDocs(tabId);
-    });
-    markdownBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (currentMode === "markdown") return;
-      currentMode = "markdown";
-      updateSwitch();
-      await renderDocs(tabId);
-    });
-    switchContainer.addEventListener("click", async (e) => {
-      if (e.target === markdownBtn || e.target === markupBtn) return;
-      currentMode = currentMode === "markdown" ? "markup" : "markdown";
-      updateSwitch();
-      await renderDocs(tabId);
-    });
-    buttonsContainer.appendChild(markupBtn);
-    buttonsContainer.appendChild(markdownBtn);
-    switchContainer.appendChild(slider);
-    switchContainer.appendChild(buttonsContainer);
-    setTimeout(() => {
-      updateSwitch();
-    }, 0);
-    let resizeTimeout;
-    const resizeHandler = () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        updateSwitch();
-      }, 100);
-    };
-    window.addEventListener("resize", resizeHandler);
-    toggleContainer.appendChild(label);
-    toggleContainer.appendChild(switchContainer);
-    return toggleContainer;
-  }
-  function createDocTabs(root, tabId, allDocs, mainUrl) {
-    const existing = root.querySelector(".eds-doc-tabs-container");
-    if (existing) {
-      existing.remove();
-    }
-    if (!currentSelectedDocUrl) {
-      currentSelectedDocUrl = mainUrl;
-    }
-    const docTabsContainer = document.createElement("div");
-    docTabsContainer.className = "eds-doc-tabs-container";
-    docTabsContainer.style.cssText = "display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-muted); overflow-x: auto;";
-    allDocs.forEach((doc) => {
-      const tab = document.createElement("button");
-      tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
-      try {
-        const urlObj = new URL(doc.url);
-        let pathname = urlObj.pathname;
-        if (pathname === "/" || pathname === "") {
-          pathname = "/";
-        }
-        const displayName = doc.isMain ? `Main: ${pathname}` : pathname;
-        tab.textContent = displayName;
-      } catch (e) {
-        tab.textContent = doc.url;
-      }
-      if (doc.url === currentSelectedDocUrl) {
-        tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
-      }
-      tab.addEventListener("click", async () => {
-        currentSelectedDocUrl = doc.url;
-        docTabsContainer.querySelectorAll("button").forEach((btn) => {
-          btn.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
-        });
-        tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
-        await loadAndRenderDoc(doc.url, tabId);
-      });
-      docTabsContainer.appendChild(tab);
-    });
-    const toggleContainer = root.querySelector(".eds-mode-toggle-container");
-    if (toggleContainer && toggleContainer.nextSibling) {
-      root.insertBefore(docTabsContainer, toggleContainer.nextSibling);
-    } else {
-      root.appendChild(docTabsContainer);
-    }
-    return docTabsContainer;
-  }
-  async function loadAndRenderDoc(url, tabId) {
-    const root = document.querySelector('[data-tab-panel="docs"]');
-    let contentArea = root.querySelector(".eds-docs-content-area");
-    if (!contentArea) {
-      contentArea = document.createElement("div");
-      contentArea.className = "eds-docs-content-area";
-      root.appendChild(contentArea);
-    }
-    contentArea.innerHTML = '<p class="eds-loading">Loading documentation\u2026</p>';
-    try {
-      let content;
-      if (currentMode === "markdown") {
-        const markdownUrl = getMarkdownUrl(url);
-        if (!markdownUrl) {
-          contentArea.innerHTML = '<p class="eds-empty">Could not construct markdown URL.</p>';
-          return;
-        }
-        const now = Date.now();
-        const cacheAge = markdownCache.timestamp ? now - markdownCache.timestamp : Infinity;
-        const useCache = markdownCache.url === markdownUrl && cacheAge < 5 * 60 * 1e3;
-        if (useCache && markdownCache.content) {
-          content = markdownCache.content;
-          console.log("[EDS Inspector Panel] Using cached markdown");
-        } else {
-          const response = await fetch(markdownUrl);
-          if (!response.ok) {
-            if (response.status === 404) {
-              contentArea.innerHTML = `<p class="eds-empty">Markdown file not found at:<br><code style="word-break: break-all; background: var(--bg-muted); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 8px;">${markdownUrl}</code></p>`;
-            } else {
-              contentArea.innerHTML = `<p class="eds-empty">Failed to load markdown: ${response.status} ${response.statusText}</p>`;
-            }
-            return;
-          }
-          content = await response.text();
-          markdownCache = {
-            url: markdownUrl,
-            content,
-            timestamp: now
-          };
-        }
-      } else {
-        const html = await sendToContent(tabId, "get-fetched-html-content", { url });
-        if (html) {
-          content = html;
-        } else {
-          const response = await fetch(url);
-          if (!response.ok) {
-            contentArea.innerHTML = `<p class="eds-empty">Failed to load markup: ${response.status} ${response.statusText}</p>`;
-            return;
-          }
-          content = await response.text();
-        }
-      }
-      renderDocsContent(contentArea, content, currentMode, tabId);
-    } catch (err) {
-      console.error("[EDS Inspector Panel] Error loading doc:", err);
-      contentArea.innerHTML = `<p class="eds-empty">Error loading documentation: ${err.message}</p>`;
-    }
-  }
-  async function renderDocs(tabId) {
-    const root = document.querySelector('[data-tab-panel="docs"]');
-    let toggleContainer = root.querySelector(".eds-mode-toggle-container");
-    if (!toggleContainer) {
-      toggleContainer = createModeToggle(root, tabId);
-      toggleContainer.className = "eds-mode-toggle-container";
-      root.innerHTML = "";
-      root.appendChild(toggleContainer);
-    }
-    const fetchedDocs = await sendToContent(tabId, "get-fetched-html-documents");
-    const tab = await chrome.tabs.get(tabId);
-    if (!tab || !tab.url) {
-      const contentArea2 = root.querySelector(".eds-docs-content-area") || document.createElement("div");
-      contentArea2.className = "eds-docs-content-area";
-      if (!root.querySelector(".eds-docs-content-area")) {
-        root.appendChild(contentArea2);
-      }
-      contentArea2.innerHTML = '<p class="eds-empty">Could not determine current page URL.</p>';
-      return;
-    }
-    const mainUrl = tab.url.split("?")[0];
-    if (fetchedDocs && fetchedDocs.length > 0) {
-      const allDocs = [
-        { url: mainUrl, isMain: true },
-        ...fetchedDocs.map((doc) => ({ url: doc.url, isMain: false }))
-      ];
-      createDocTabs(root, tabId, allDocs, mainUrl);
-    } else {
-      const existing = root.querySelector(".eds-doc-tabs-container");
-      if (existing) {
-        existing.remove();
-      }
-    }
-    let contentArea = root.querySelector(".eds-docs-content-area");
-    if (!contentArea) {
-      contentArea = document.createElement("div");
-      contentArea.className = "eds-docs-content-area";
-      root.appendChild(contentArea);
-    }
-    const selectedUrl = currentSelectedDocUrl || mainUrl;
-    await loadAndRenderDoc(selectedUrl, tabId);
-  }
-  var markdownCache, currentMode, currentSelectedDocUrl;
-  var init_docs = __esm({
-    "src/panel/renderers/docs.js"() {
-      init_url();
-      init_file_utils();
-      init_utils();
-      markdownCache = {
-        url: null,
-        content: null,
-        timestamp: null
-      };
-      currentMode = "markup";
-      currentSelectedDocUrl = null;
-    }
-  });
-
-  // src/panel/renderers/control.js
-  function renderControl(state, refresh, tabId) {
-    const root = document.querySelector('[data-tab-panel="control"]');
-    root.innerHTML = "";
-    const overlayControls = document.createElement("div");
-    overlayControls.className = "overlay-controls";
-    const sectionsItem = document.createElement("div");
-    sectionsItem.className = "control-item";
-    const sectionsLabel = document.createElement("label");
-    sectionsLabel.className = "control-label";
-    const sectionsCheckbox = document.createElement("input");
-    sectionsCheckbox.type = "checkbox";
-    sectionsCheckbox.id = "control-toggle-sections";
-    sectionsCheckbox.className = "control-checkbox";
-    sectionsCheckbox.checked = state.overlaysEnabled?.sections ?? true;
-    sectionsCheckbox.addEventListener("change", async (evt) => {
-      try {
-        await sendToContent(tabId, "toggle-overlay", { key: "sections", value: evt.target.checked });
-        const state2 = await sendToContent(tabId, "state");
-        if (state2 && state2.overlaysEnabled) {
-          chrome.storage.local.set({
-            "eds-overlays-enabled": state2.overlaysEnabled
-          }).catch((err) => {
-            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
-          });
-        }
-      } finally {
-        refresh();
-      }
-    });
-    const sectionsText = document.createElement("span");
-    sectionsText.className = "control-text";
-    sectionsText.textContent = "Sections";
-    sectionsLabel.appendChild(sectionsCheckbox);
-    sectionsLabel.appendChild(sectionsText);
-    sectionsItem.appendChild(sectionsLabel);
-    overlayControls.appendChild(sectionsItem);
-    const blocksItem = document.createElement("div");
-    blocksItem.className = "control-item";
-    const blocksLabel = document.createElement("label");
-    blocksLabel.className = "control-label";
-    const blocksCheckbox = document.createElement("input");
-    blocksCheckbox.type = "checkbox";
-    blocksCheckbox.id = "control-toggle-blocks";
-    blocksCheckbox.className = "control-checkbox";
-    blocksCheckbox.checked = state.overlaysEnabled?.blocks ?? true;
-    blocksCheckbox.addEventListener("change", async (evt) => {
-      try {
-        await sendToContent(tabId, "toggle-overlay", { key: "blocks", value: evt.target.checked });
-        const state2 = await sendToContent(tabId, "state");
-        if (state2 && state2.overlaysEnabled) {
-          chrome.storage.local.set({
-            "eds-overlays-enabled": state2.overlaysEnabled
-          }).catch((err) => {
-            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
-          });
-        }
-      } finally {
-        refresh();
-      }
-    });
-    const blocksText = document.createElement("span");
-    blocksText.className = "control-text";
-    blocksText.textContent = "Blocks";
-    blocksLabel.appendChild(blocksCheckbox);
-    blocksLabel.appendChild(blocksText);
-    blocksItem.appendChild(blocksLabel);
-    overlayControls.appendChild(blocksItem);
-    const defaultItem = document.createElement("div");
-    defaultItem.className = "control-item";
-    const defaultLabel = document.createElement("label");
-    defaultLabel.className = "control-label";
-    const defaultCheckbox = document.createElement("input");
-    defaultCheckbox.type = "checkbox";
-    defaultCheckbox.id = "control-toggle-default";
-    defaultCheckbox.className = "control-checkbox";
-    defaultCheckbox.checked = state.overlaysEnabled?.defaultContent ?? true;
-    defaultCheckbox.addEventListener("change", async (evt) => {
-      try {
-        await sendToContent(tabId, "toggle-overlay", { key: "defaultContent", value: evt.target.checked });
-        const state2 = await sendToContent(tabId, "state");
-        if (state2 && state2.overlaysEnabled) {
-          chrome.storage.local.set({
-            "eds-overlays-enabled": state2.overlaysEnabled
-          }).catch((err) => {
-            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
-          });
-        }
-      } finally {
-        refresh();
-      }
-    });
-    const defaultText = document.createElement("span");
-    defaultText.className = "control-text";
-    defaultText.textContent = "Default Content";
-    defaultLabel.appendChild(defaultCheckbox);
-    defaultLabel.appendChild(defaultText);
-    defaultItem.appendChild(defaultLabel);
-    overlayControls.appendChild(defaultItem);
-    root.appendChild(overlayControls);
-    const reloadButton = document.createElement("button");
-    reloadButton.className = "eds-button eds-button--primary";
-    reloadButton.textContent = "Reload";
-    reloadButton.style.cssText = "width: 100%; margin-top: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--accent); color: #0b1220; cursor: pointer; font-weight: 600; font-size: 12px;";
-    reloadButton.addEventListener("click", async () => {
-      reloadButton.disabled = true;
-      reloadButton.textContent = "Reloading...";
-      try {
-        await sendToContent(tabId, "scroll-page-for-lazy-load");
-        await sendToContent(tabId, "reanalyze");
-        await refresh();
-      } catch (err) {
-        console.error("[EDS Inspector Panel] Error reloading:", err);
-      } finally {
-        reloadButton.disabled = false;
-        reloadButton.textContent = "Reload";
-      }
-    });
-    root.appendChild(reloadButton);
-  }
-  var init_control = __esm({
-    "src/panel/renderers/control.js"() {
-      init_utils();
     }
   });
 
@@ -5483,6 +5182,426 @@
     }
   });
 
+  // src/panel/renderers/docs.js
+  function renderDocsContent(container, content, mode, tabId) {
+    container.innerHTML = "";
+    const contentText = typeof content === "object" ? content.documents || content : content;
+    renderSingleDoc(container, contentText, mode, tabId);
+  }
+  function renderSingleDoc(container, content, mode, tabId, isNested = false) {
+    if (!isNested) {
+      const existing = container.querySelector(".eds-docs-content");
+      if (existing) existing.remove();
+    }
+    const contentArea = document.createElement("div");
+    contentArea.className = "eds-docs-content";
+    contentArea.style.cssText = "padding: 0; background: var(--bg); max-height: 100vh; overflow-y: auto; position: relative;";
+    const headerBar = document.createElement("div");
+    headerBar.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end;";
+    const fullscreenBtn = document.createElement("button");
+    fullscreenBtn.innerHTML = "\u26F6";
+    fullscreenBtn.title = "Fullscreen view";
+    fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+    fullscreenBtn.addEventListener("mouseenter", () => {
+      fullscreenBtn.style.opacity = "1";
+      fullscreenBtn.style.background = "var(--bg)";
+    });
+    fullscreenBtn.addEventListener("mouseleave", () => {
+      fullscreenBtn.style.opacity = "0.7";
+      fullscreenBtn.style.background = "transparent";
+    });
+    fullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const fileType = mode === "markdown" ? "markdown" : "html";
+      const processedCode = processCode(content, fileType, mode === "markdown" ? "Markdown" : "Markup");
+      const searchKey2 = `docs-${mode}-fullscreen-${Date.now()}`;
+      createFullscreenViewer(content, processedCode, mode === "markdown" ? "Markdown" : "Markup", searchKey2);
+    });
+    headerBar.appendChild(fullscreenBtn);
+    const searchKey = `docs-${mode}-${Date.now()}`;
+    const searchUI = createSearchUI(contentArea, content, searchKey);
+    const codeContainer = document.createElement("div");
+    codeContainer.style.cssText = "padding: 16px;";
+    const sourcePre = document.createElement("pre");
+    sourcePre.className = "eds-code";
+    sourcePre.style.cssText = "background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;";
+    const sourceCode = document.createElement("code");
+    sourceCode.textContent = content;
+    sourceCode.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
+    sourcePre.appendChild(sourceCode);
+    codeContainer.appendChild(sourcePre);
+    contentArea.appendChild(searchUI);
+    contentArea.appendChild(codeContainer);
+    container.appendChild(headerBar);
+    container.appendChild(contentArea);
+  }
+  function createModeToggle(root, tabId) {
+    const toggleContainer = document.createElement("div");
+    toggleContainer.style.cssText = "display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);";
+    const label = document.createElement("span");
+    label.textContent = "View:";
+    label.style.cssText = "font-size: 12px; color: var(--text-muted); font-weight: 500;";
+    const switchContainer = document.createElement("div");
+    switchContainer.style.cssText = "position: relative; display: inline-flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; cursor: pointer; transition: all 0.2s ease;";
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.style.cssText = "position: relative; display: flex; z-index: 1;";
+    const markupBtn = document.createElement("button");
+    markupBtn.textContent = "Markup";
+    markupBtn.className = "eds-mode-toggle-btn";
+    markupBtn.style.cssText = "padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;";
+    const markdownBtn = document.createElement("button");
+    markdownBtn.textContent = "Markdown";
+    markdownBtn.className = "eds-mode-toggle-btn";
+    markdownBtn.style.cssText = "padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;";
+    const slider = document.createElement("div");
+    slider.style.cssText = "position: absolute; top: 2px; left: 2px; height: calc(100% - 4px); background: #6366f1; border-radius: 6px; transition: all 0.2s ease; z-index: 0;";
+    const updateSwitch = () => {
+      const markupWidth = markupBtn.offsetWidth;
+      const markdownWidth = markdownBtn.offsetWidth;
+      if (currentMode === "markup") {
+        slider.style.width = `${markupWidth}px`;
+        slider.style.transform = "translateX(0)";
+        markupBtn.style.color = "white";
+        markdownBtn.style.color = "var(--text)";
+      } else {
+        slider.style.width = `${markdownWidth}px`;
+        slider.style.transform = `translateX(${markupWidth}px)`;
+        markupBtn.style.color = "var(--text)";
+        markdownBtn.style.color = "white";
+      }
+    };
+    setTimeout(() => {
+      updateSwitch();
+    }, 0);
+    markupBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (currentMode === "markup") return;
+      currentMode = "markup";
+      updateSwitch();
+      await renderDocs(tabId);
+    });
+    markdownBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (currentMode === "markdown") return;
+      currentMode = "markdown";
+      updateSwitch();
+      await renderDocs(tabId);
+    });
+    switchContainer.addEventListener("click", async (e) => {
+      if (e.target === markdownBtn || e.target === markupBtn) return;
+      currentMode = currentMode === "markdown" ? "markup" : "markdown";
+      updateSwitch();
+      await renderDocs(tabId);
+    });
+    buttonsContainer.appendChild(markupBtn);
+    buttonsContainer.appendChild(markdownBtn);
+    switchContainer.appendChild(slider);
+    switchContainer.appendChild(buttonsContainer);
+    setTimeout(() => {
+      updateSwitch();
+    }, 0);
+    let resizeTimeout;
+    const resizeHandler = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        updateSwitch();
+      }, 100);
+    };
+    window.addEventListener("resize", resizeHandler);
+    toggleContainer.appendChild(label);
+    toggleContainer.appendChild(switchContainer);
+    return toggleContainer;
+  }
+  function createDocTabs(root, tabId, allDocs, mainUrl) {
+    const existing = root.querySelector(".eds-doc-tabs-container");
+    if (existing) {
+      existing.remove();
+    }
+    if (!currentSelectedDocUrl) {
+      currentSelectedDocUrl = mainUrl;
+    }
+    const docTabsContainer = document.createElement("div");
+    docTabsContainer.className = "eds-doc-tabs-container";
+    docTabsContainer.style.cssText = "display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-muted); overflow-x: auto;";
+    allDocs.forEach((doc) => {
+      const tab = document.createElement("button");
+      tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+      try {
+        const urlObj = new URL(doc.url);
+        let pathname = urlObj.pathname;
+        if (pathname === "/" || pathname === "") {
+          pathname = "/";
+        }
+        const displayName = doc.isMain ? `Main: ${pathname}` : pathname;
+        tab.textContent = displayName;
+      } catch (e) {
+        tab.textContent = doc.url;
+      }
+      if (doc.url === currentSelectedDocUrl) {
+        tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+      }
+      tab.addEventListener("click", async () => {
+        currentSelectedDocUrl = doc.url;
+        docTabsContainer.querySelectorAll("button").forEach((btn) => {
+          btn.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+        });
+        tab.style.cssText = "padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.2s;";
+        await loadAndRenderDoc(doc.url, tabId);
+      });
+      docTabsContainer.appendChild(tab);
+    });
+    const toggleContainer = root.querySelector(".eds-mode-toggle-container");
+    if (toggleContainer && toggleContainer.nextSibling) {
+      root.insertBefore(docTabsContainer, toggleContainer.nextSibling);
+    } else {
+      root.appendChild(docTabsContainer);
+    }
+    return docTabsContainer;
+  }
+  async function loadAndRenderDoc(url, tabId) {
+    const root = document.querySelector('[data-tab-panel="docs"]');
+    let contentArea = root.querySelector(".eds-docs-content-area");
+    if (!contentArea) {
+      contentArea = document.createElement("div");
+      contentArea.className = "eds-docs-content-area";
+      root.appendChild(contentArea);
+    }
+    contentArea.innerHTML = '<p class="eds-loading">Loading documentation\u2026</p>';
+    try {
+      let content;
+      if (currentMode === "markdown") {
+        const markdownUrl = getMarkdownUrl(url);
+        if (!markdownUrl) {
+          contentArea.innerHTML = '<p class="eds-empty">Could not construct markdown URL.</p>';
+          return;
+        }
+        const now = Date.now();
+        const cacheAge = markdownCache.timestamp ? now - markdownCache.timestamp : Infinity;
+        const useCache = markdownCache.url === markdownUrl && cacheAge < 5 * 60 * 1e3;
+        if (useCache && markdownCache.content) {
+          content = markdownCache.content;
+          console.log("[EDS Inspector Panel] Using cached markdown");
+        } else {
+          const response = await fetch(markdownUrl);
+          if (!response.ok) {
+            if (response.status === 404) {
+              contentArea.innerHTML = `<p class="eds-empty">Markdown file not found at:<br><code style="word-break: break-all; background: var(--bg-muted); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 8px;">${markdownUrl}</code></p>`;
+            } else {
+              contentArea.innerHTML = `<p class="eds-empty">Failed to load markdown: ${response.status} ${response.statusText}</p>`;
+            }
+            return;
+          }
+          content = await response.text();
+          markdownCache = {
+            url: markdownUrl,
+            content,
+            timestamp: now
+          };
+        }
+      } else {
+        const html = await sendToContent(tabId, "get-fetched-html-content", { url });
+        if (html) {
+          content = html;
+        } else {
+          const response = await fetch(url);
+          if (!response.ok) {
+            contentArea.innerHTML = `<p class="eds-empty">Failed to load markup: ${response.status} ${response.statusText}</p>`;
+            return;
+          }
+          content = await response.text();
+        }
+      }
+      renderDocsContent(contentArea, content, currentMode, tabId);
+    } catch (err) {
+      console.error("[EDS Inspector Panel] Error loading doc:", err);
+      contentArea.innerHTML = `<p class="eds-empty">Error loading documentation: ${err.message}</p>`;
+    }
+  }
+  async function renderDocs(tabId) {
+    const root = document.querySelector('[data-tab-panel="docs"]');
+    let toggleContainer = root.querySelector(".eds-mode-toggle-container");
+    if (!toggleContainer) {
+      toggleContainer = createModeToggle(root, tabId);
+      toggleContainer.className = "eds-mode-toggle-container";
+      root.innerHTML = "";
+      root.appendChild(toggleContainer);
+    }
+    const fetchedDocs = await sendToContent(tabId, "get-fetched-html-documents");
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab || !tab.url) {
+      const contentArea2 = root.querySelector(".eds-docs-content-area") || document.createElement("div");
+      contentArea2.className = "eds-docs-content-area";
+      if (!root.querySelector(".eds-docs-content-area")) {
+        root.appendChild(contentArea2);
+      }
+      contentArea2.innerHTML = '<p class="eds-empty">Could not determine current page URL.</p>';
+      return;
+    }
+    const mainUrl = tab.url.split("?")[0];
+    if (fetchedDocs && fetchedDocs.length > 0) {
+      const allDocs = [
+        { url: mainUrl, isMain: true },
+        ...fetchedDocs.map((doc) => ({ url: doc.url, isMain: false }))
+      ];
+      createDocTabs(root, tabId, allDocs, mainUrl);
+    } else {
+      const existing = root.querySelector(".eds-doc-tabs-container");
+      if (existing) {
+        existing.remove();
+      }
+    }
+    let contentArea = root.querySelector(".eds-docs-content-area");
+    if (!contentArea) {
+      contentArea = document.createElement("div");
+      contentArea.className = "eds-docs-content-area";
+      root.appendChild(contentArea);
+    }
+    const selectedUrl = currentSelectedDocUrl || mainUrl;
+    await loadAndRenderDoc(selectedUrl, tabId);
+  }
+  var markdownCache, currentMode, currentSelectedDocUrl;
+  var init_docs = __esm({
+    "src/panel/renderers/docs.js"() {
+      init_url();
+      init_file_utils();
+      init_utils();
+      init_code_processor();
+      markdownCache = {
+        url: null,
+        content: null,
+        timestamp: null
+      };
+      currentMode = "markup";
+      currentSelectedDocUrl = null;
+    }
+  });
+
+  // src/panel/renderers/control.js
+  function renderControl(state, refresh, tabId) {
+    const root = document.querySelector('[data-tab-panel="control"]');
+    root.innerHTML = "";
+    const overlayControls = document.createElement("div");
+    overlayControls.className = "overlay-controls";
+    const sectionsItem = document.createElement("div");
+    sectionsItem.className = "control-item";
+    const sectionsLabel = document.createElement("label");
+    sectionsLabel.className = "control-label";
+    const sectionsCheckbox = document.createElement("input");
+    sectionsCheckbox.type = "checkbox";
+    sectionsCheckbox.id = "control-toggle-sections";
+    sectionsCheckbox.className = "control-checkbox";
+    sectionsCheckbox.checked = state.overlaysEnabled?.sections ?? true;
+    sectionsCheckbox.addEventListener("change", async (evt) => {
+      try {
+        await sendToContent(tabId, "toggle-overlay", { key: "sections", value: evt.target.checked });
+        const state2 = await sendToContent(tabId, "state");
+        if (state2 && state2.overlaysEnabled) {
+          chrome.storage.local.set({
+            "eds-overlays-enabled": state2.overlaysEnabled
+          }).catch((err) => {
+            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
+          });
+        }
+      } finally {
+        refresh();
+      }
+    });
+    const sectionsText = document.createElement("span");
+    sectionsText.className = "control-text";
+    sectionsText.textContent = "Sections";
+    sectionsLabel.appendChild(sectionsCheckbox);
+    sectionsLabel.appendChild(sectionsText);
+    sectionsItem.appendChild(sectionsLabel);
+    overlayControls.appendChild(sectionsItem);
+    const blocksItem = document.createElement("div");
+    blocksItem.className = "control-item";
+    const blocksLabel = document.createElement("label");
+    blocksLabel.className = "control-label";
+    const blocksCheckbox = document.createElement("input");
+    blocksCheckbox.type = "checkbox";
+    blocksCheckbox.id = "control-toggle-blocks";
+    blocksCheckbox.className = "control-checkbox";
+    blocksCheckbox.checked = state.overlaysEnabled?.blocks ?? true;
+    blocksCheckbox.addEventListener("change", async (evt) => {
+      try {
+        await sendToContent(tabId, "toggle-overlay", { key: "blocks", value: evt.target.checked });
+        const state2 = await sendToContent(tabId, "state");
+        if (state2 && state2.overlaysEnabled) {
+          chrome.storage.local.set({
+            "eds-overlays-enabled": state2.overlaysEnabled
+          }).catch((err) => {
+            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
+          });
+        }
+      } finally {
+        refresh();
+      }
+    });
+    const blocksText = document.createElement("span");
+    blocksText.className = "control-text";
+    blocksText.textContent = "Blocks";
+    blocksLabel.appendChild(blocksCheckbox);
+    blocksLabel.appendChild(blocksText);
+    blocksItem.appendChild(blocksLabel);
+    overlayControls.appendChild(blocksItem);
+    const defaultItem = document.createElement("div");
+    defaultItem.className = "control-item";
+    const defaultLabel = document.createElement("label");
+    defaultLabel.className = "control-label";
+    const defaultCheckbox = document.createElement("input");
+    defaultCheckbox.type = "checkbox";
+    defaultCheckbox.id = "control-toggle-default";
+    defaultCheckbox.className = "control-checkbox";
+    defaultCheckbox.checked = state.overlaysEnabled?.defaultContent ?? true;
+    defaultCheckbox.addEventListener("change", async (evt) => {
+      try {
+        await sendToContent(tabId, "toggle-overlay", { key: "defaultContent", value: evt.target.checked });
+        const state2 = await sendToContent(tabId, "state");
+        if (state2 && state2.overlaysEnabled) {
+          chrome.storage.local.set({
+            "eds-overlays-enabled": state2.overlaysEnabled
+          }).catch((err) => {
+            console.error("[EDS Inspector Panel] Failed to save overlay state:", err);
+          });
+        }
+      } finally {
+        refresh();
+      }
+    });
+    const defaultText = document.createElement("span");
+    defaultText.className = "control-text";
+    defaultText.textContent = "Default Content";
+    defaultLabel.appendChild(defaultCheckbox);
+    defaultLabel.appendChild(defaultText);
+    defaultItem.appendChild(defaultLabel);
+    overlayControls.appendChild(defaultItem);
+    root.appendChild(overlayControls);
+    const reloadButton = document.createElement("button");
+    reloadButton.className = "eds-button eds-button--primary";
+    reloadButton.textContent = "Reload";
+    reloadButton.style.cssText = "width: 100%; margin-top: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--accent); color: #0b1220; cursor: pointer; font-weight: 600; font-size: 12px;";
+    reloadButton.addEventListener("click", async () => {
+      reloadButton.disabled = true;
+      reloadButton.textContent = "Reloading...";
+      try {
+        await sendToContent(tabId, "scroll-page-for-lazy-load");
+        await sendToContent(tabId, "reanalyze");
+        await refresh();
+      } catch (err) {
+        console.error("[EDS Inspector Panel] Error reloading:", err);
+      } finally {
+        reloadButton.disabled = false;
+        reloadButton.textContent = "Reload";
+      }
+    });
+    root.appendChild(reloadButton);
+  }
+  var init_control = __esm({
+    "src/panel/renderers/control.js"() {
+      init_utils();
+    }
+  });
+
   // src/panel/renderers/block-detail.js
   async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId, preservedExpandedPaths) {
     const root = document.querySelector('[data-tab-panel="blocks"]');
@@ -5592,7 +5711,8 @@
     const ssrContainer = document.createElement("div");
     ssrContainer.style.cssText = "border: 1px solid var(--border); border-radius: 8px; overflow: hidden;";
     const ssrHeader = document.createElement("div");
-    ssrHeader.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);";
+    ssrHeader.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;";
+    const ssrHeaderLeft = document.createElement("div");
     const ssrTitle = document.createElement("div");
     ssrTitle.textContent = "Markup (SSR)";
     ssrTitle.style.cssText = "font-weight: 600; color: var(--text); font-size: 12px; margin-bottom: 4px;";
@@ -5609,8 +5729,29 @@
       ssrDocInfo.textContent = "Source: Unknown";
     }
     ssrDocInfo.style.cssText = "font-size: 10px; color: var(--text-muted);";
-    ssrHeader.appendChild(ssrTitle);
-    ssrHeader.appendChild(ssrDocInfo);
+    ssrHeaderLeft.appendChild(ssrTitle);
+    ssrHeaderLeft.appendChild(ssrDocInfo);
+    const ssrFullscreenBtn = document.createElement("button");
+    ssrFullscreenBtn.innerHTML = "\u26F6";
+    ssrFullscreenBtn.title = "Fullscreen view";
+    ssrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    ssrFullscreenBtn.addEventListener("mouseenter", () => {
+      ssrFullscreenBtn.style.opacity = "1";
+      ssrFullscreenBtn.style.background = "var(--bg)";
+    });
+    ssrFullscreenBtn.addEventListener("mouseleave", () => {
+      ssrFullscreenBtn.style.opacity = "0.7";
+      ssrFullscreenBtn.style.background = "transparent";
+    });
+    ssrFullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (ssrMarkupContent) {
+        const processedCode = processCode(ssrMarkupContent, "html", "Markup (SSR)");
+        createFullscreenViewer(ssrMarkupContent, processedCode, "Markup (SSR)", `markup-ssr-fullscreen-${detail.block.id}`);
+      }
+    });
+    ssrHeader.appendChild(ssrHeaderLeft);
+    ssrHeader.appendChild(ssrFullscreenBtn);
     const ssrCodeContainer = document.createElement("div");
     ssrCodeContainer.style.cssText = "position: relative;";
     if (ssrMarkupContent) {
@@ -5638,14 +5779,36 @@
     const csrContainer = document.createElement("div");
     csrContainer.style.cssText = "border: 1px solid var(--border); border-radius: 8px; overflow: hidden;";
     const csrHeader = document.createElement("div");
-    csrHeader.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);";
+    csrHeader.style.cssText = "padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;";
+    const csrHeaderLeft = document.createElement("div");
     const csrTitle = document.createElement("div");
     csrTitle.textContent = "Markup (CSR)";
     csrTitle.style.cssText = "font-weight: 600; color: var(--text); font-size: 12px; margin-bottom: 4px;";
     const csrSpacer = document.createElement("div");
     csrSpacer.style.cssText = "font-size: 10px; height: 14px;";
-    csrHeader.appendChild(csrTitle);
-    csrHeader.appendChild(csrSpacer);
+    csrHeaderLeft.appendChild(csrTitle);
+    csrHeaderLeft.appendChild(csrSpacer);
+    const csrFullscreenBtn = document.createElement("button");
+    csrFullscreenBtn.innerHTML = "\u26F6";
+    csrFullscreenBtn.title = "Fullscreen view";
+    csrFullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    csrFullscreenBtn.addEventListener("mouseenter", () => {
+      csrFullscreenBtn.style.opacity = "1";
+      csrFullscreenBtn.style.background = "var(--bg)";
+    });
+    csrFullscreenBtn.addEventListener("mouseleave", () => {
+      csrFullscreenBtn.style.opacity = "0.7";
+      csrFullscreenBtn.style.background = "transparent";
+    });
+    csrFullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (csrMarkupContent && csrMarkupContent !== "No markup captured for this block.") {
+        const processedCode = processCode(csrMarkupContent, "html", "Markup (CSR)");
+        createFullscreenViewer(csrMarkupContent, processedCode, "Markup (CSR)", `markup-csr-fullscreen-${detail.block.id}`);
+      }
+    });
+    csrHeader.appendChild(csrHeaderLeft);
+    csrHeader.appendChild(csrFullscreenBtn);
     const csrCodeContainer = document.createElement("div");
     csrCodeContainer.style.cssText = "position: relative;";
     if (csrMarkupContent !== "No markup captured for this block.") {
@@ -5792,6 +5955,24 @@
       copyBtn = rightSection.querySelector(".eds-copy-button");
       rightSection.appendChild(pill);
     }
+    const fullscreenBtn = document.createElement("button");
+    fullscreenBtn.innerHTML = "\u26F6";
+    fullscreenBtn.title = "Fullscreen view";
+    fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;";
+    fullscreenBtn.addEventListener("mouseenter", () => {
+      fullscreenBtn.style.opacity = "1";
+      fullscreenBtn.style.background = "var(--bg)";
+    });
+    fullscreenBtn.addEventListener("mouseleave", () => {
+      fullscreenBtn.style.opacity = "0.7";
+      fullscreenBtn.style.background = "transparent";
+    });
+    fullscreenBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const processedCode2 = processCode(rawContent, asset.type, asset.path);
+      createFullscreenViewer(rawContent, processedCode2, asset.path, `block-asset-fullscreen-${asset.path}`);
+    });
+    rightSection.appendChild(fullscreenBtn);
     const content = document.createElement("div");
     content.className = "eds-asset-content";
     const processedCode = processCode(rawContent, asset.type, asset.path);
@@ -6061,12 +6242,29 @@
             code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
             pre.appendChild(code);
             content.innerHTML = "";
+            const searchKey = `script-${scriptFile.url}`;
             if (!rightSection.querySelector(".eds-copy-button")) {
               const copyBtn = createCopyButton(codeText, null, null);
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
+              const fullscreenBtn = document.createElement("button");
+              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.title = "Fullscreen view";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.addEventListener("mouseenter", () => {
+                fullscreenBtn.style.opacity = "1";
+                fullscreenBtn.style.background = "var(--bg)";
+              });
+              fullscreenBtn.addEventListener("mouseleave", () => {
+                fullscreenBtn.style.opacity = "0.7";
+                fullscreenBtn.style.background = "transparent";
+              });
+              fullscreenBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                createFullscreenViewer(codeText, code.innerHTML, scriptFile.pathname || scriptFile.url, searchKey);
+              });
+              rightSection.appendChild(fullscreenBtn);
             }
-            const searchKey = `script-${scriptFile.url}`;
             const searchUI = createSearchUI(content, codeText, searchKey);
             const codeContainer = document.createElement("div");
             codeContainer.style.cssText = "padding: 16px;";
@@ -6294,12 +6492,29 @@
             code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
             pre.appendChild(code);
             content.innerHTML = "";
+            const searchKey = `json-${jsonFile.url}`;
             if (!rightSection.querySelector(".eds-copy-button")) {
               const copyBtn = createCopyButton(jsonString, null, null);
               copyBtn.style.cssText = "background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;";
               rightSection.appendChild(copyBtn);
+              const fullscreenBtn = document.createElement("button");
+              fullscreenBtn.innerHTML = "\u26F6";
+              fullscreenBtn.title = "Fullscreen view";
+              fullscreenBtn.style.cssText = "background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;";
+              fullscreenBtn.addEventListener("mouseenter", () => {
+                fullscreenBtn.style.opacity = "1";
+                fullscreenBtn.style.background = "var(--bg)";
+              });
+              fullscreenBtn.addEventListener("mouseleave", () => {
+                fullscreenBtn.style.opacity = "0.7";
+                fullscreenBtn.style.background = "transparent";
+              });
+              fullscreenBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                createFullscreenViewer(jsonString, code.innerHTML, jsonFile.pathname || jsonFile.url, searchKey);
+              });
+              rightSection.appendChild(fullscreenBtn);
             }
-            const searchKey = `json-${jsonFile.url}`;
             const searchUI = createSearchUI(content, jsonString, searchKey);
             const codeContainer = document.createElement("div");
             codeContainer.style.cssText = "padding: 16px;";

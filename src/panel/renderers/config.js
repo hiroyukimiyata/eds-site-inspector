@@ -2,6 +2,7 @@
  * Configタブのレンダラー
  */
 import { processCode } from '../utils/code-processor.js';
+import { createFullscreenViewer } from '../utils/file-utils.js';
 
 /**
  * Configタブをレンダリング
@@ -44,25 +45,52 @@ export async function renderConfig(tabId) {
       const container = document.createElement('div');
       container.className = 'eds-config-container';
       
+      // ヘッダーを作成（全画面表示ボタン用）
+      const headerBar = document.createElement('div');
+      headerBar.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-radius: 8px 8px 0 0;';
+      
+      const urlInfo = document.createElement('div');
+      urlInfo.style.cssText = 'font-size: 11px; color: var(--muted);';
+      urlInfo.innerHTML = `Source: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${configUrl}</code>`;
+      
+      // 全画面表示ボタンを追加
+      const fullscreenBtn = document.createElement('button');
+      fullscreenBtn.innerHTML = '⛶';
+      fullscreenBtn.title = 'Fullscreen view';
+      fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
+      fullscreenBtn.addEventListener('mouseenter', () => {
+        fullscreenBtn.style.opacity = '1';
+        fullscreenBtn.style.background = 'var(--bg)';
+      });
+      fullscreenBtn.addEventListener('mouseleave', () => {
+        fullscreenBtn.style.opacity = '0.7';
+        fullscreenBtn.style.background = 'transparent';
+      });
+      
+      const jsonString = JSON.stringify(configData, null, 2);
+      const processedCode = processCode(jsonString, 'json', 'config.json');
+      
+      fullscreenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        createFullscreenViewer(jsonString, processedCode, 'config.json', `config-fullscreen-${Date.now()}`);
+      });
+      
+      headerBar.appendChild(urlInfo);
+      headerBar.appendChild(fullscreenBtn);
+      
       // JSONを整形して表示（シンタックスハイライト付き）
       const pre = document.createElement('pre');
       pre.className = 'eds-code';
       pre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; max-height: 600px; overflow-y: auto;';
       
       const code = document.createElement('code');
-      const jsonString = JSON.stringify(configData, null, 2);
       // シンタックスハイライトを適用
-      code.innerHTML = processCode(jsonString, 'json', 'config.json');
+      code.innerHTML = processedCode;
       code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
       
       pre.appendChild(code);
+      container.appendChild(headerBar);
       container.appendChild(pre);
-      
-      // URL情報を追加
-      const urlInfo = document.createElement('div');
-      urlInfo.style.cssText = 'margin-top: 12px; padding: 8px 12px; background: var(--bg-muted); border-radius: 6px; font-size: 11px; color: var(--muted);';
-      urlInfo.innerHTML = `Source: <code style="background: var(--bg); padding: 2px 6px; border-radius: 4px;">${configUrl}</code>`;
-      container.appendChild(urlInfo);
       
       root.innerHTML = '';
       root.appendChild(container);

@@ -521,3 +521,139 @@ export function createSearchUI(contentElement, rawText, searchKey = null) {
   return searchContainer;
 }
 
+/**
+ * 全画面表示モーダルを作成・表示
+ * @param {string} rawContent - 元のコンテンツ（検索用のプレーンテキスト）
+ * @param {string} processedHtml - 処理済みのHTML（シンタックスハイライト済み）
+ * @param {string} title - タイトル
+ * @param {string} searchKey - 検索キー（オプション）
+ */
+export function createFullscreenViewer(rawContent, processedHtml, title, searchKey = null) {
+  // 既存の全画面表示があれば削除
+  const existing = document.querySelector('.eds-fullscreen-viewer');
+  if (existing) {
+    existing.remove();
+  }
+  
+  // 全画面表示コンテナを作成
+  const fullscreenContainer = document.createElement('div');
+  fullscreenContainer.className = 'eds-fullscreen-viewer';
+  fullscreenContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.2s ease;
+  `;
+  
+  // ヘッダーを作成
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 12px 16px;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  `;
+  
+  const headerLeft = document.createElement('div');
+  headerLeft.style.cssText = 'display: flex; align-items: center; gap: 12px;';
+  
+  const titleElement = document.createElement('div');
+  titleElement.textContent = title;
+  titleElement.style.cssText = 'font-weight: 600; color: var(--text); font-size: 14px;';
+  
+  headerLeft.appendChild(titleElement);
+  
+  const headerRight = document.createElement('div');
+  headerRight.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+  
+  // コピーボタン
+  const copyBtn = createCopyButton(rawContent, null, null);
+  copyBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 12px; transition: all 0.2s;';
+  
+  // 閉じるボタン
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '✕';
+  closeBtn.title = 'Close (ESC)';
+  closeBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 14px; transition: all 0.2s; font-weight: 600;';
+  closeBtn.addEventListener('click', () => {
+    fullscreenContainer.remove();
+    document.removeEventListener('keydown', handleEsc);
+  });
+  
+  headerRight.appendChild(copyBtn);
+  headerRight.appendChild(closeBtn);
+  
+  header.appendChild(headerLeft);
+  header.appendChild(headerRight);
+  
+  // コンテンツエリアを作成
+  const contentArea = document.createElement('div');
+  contentArea.style.cssText = `
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    padding: 0;
+  `;
+  
+  // 検索UIを追加（rawContentを使用）
+  const searchUI = createSearchUI(contentArea, rawContent, searchKey);
+  
+  // コードコンテナを作成
+  const codeContainer = document.createElement('div');
+  codeContainer.style.cssText = 'padding: 16px;';
+  
+  const pre = document.createElement('pre');
+  pre.className = 'eds-code';
+  pre.style.cssText = 'background: var(--bg-muted); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 0;';
+  
+  const code = document.createElement('code');
+  code.innerHTML = processedHtml;
+  code.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; line-height: 1.6; display: block;';
+  
+  pre.appendChild(code);
+  codeContainer.appendChild(pre);
+  
+  contentArea.appendChild(searchUI);
+  contentArea.appendChild(codeContainer);
+  
+  fullscreenContainer.appendChild(header);
+  fullscreenContainer.appendChild(contentArea);
+  
+  // ESCキーで閉じる
+  const handleEsc = (e) => {
+    if (e.key === 'Escape') {
+      fullscreenContainer.remove();
+      document.removeEventListener('keydown', handleEsc);
+    }
+  };
+  document.addEventListener('keydown', handleEsc);
+  
+  // アニメーション用のCSSを追加（まだ存在しない場合）
+  if (!document.querySelector('#eds-fullscreen-styles')) {
+    const style = document.createElement('style');
+    style.id = 'eds-fullscreen-styles';
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // パネルのルートに追加
+  const panelRoot = document.querySelector('[data-tab-panel]')?.closest('main') || document.body;
+  panelRoot.appendChild(fullscreenContainer);
+  
+  return fullscreenContainer;
+}
+

@@ -2106,7 +2106,25 @@
         case "scroll-to-block": {
           const block = state.blocks.find((b) => b.id === message.payload.id);
           if (block && block.element) {
-            block.element.scrollIntoView({ behavior: "smooth", block: "center" });
+            const rect = block.element.getBoundingClientRect();
+            const scrollY = window.scrollY || window.pageYOffset;
+            let labelHeight = 25;
+            const overlayRoot = document.getElementById("eds-inspector-overlay-root");
+            if (overlayRoot) {
+              const overlay = overlayRoot.querySelector(`[data-overlay-id="${block.id}"]`);
+              if (overlay) {
+                const label = overlay.querySelector(".eds-overlay__label");
+                if (label) {
+                  const labelRect = label.getBoundingClientRect();
+                  labelHeight = labelRect.height + 4;
+                }
+              }
+            }
+            const targetY = rect.top + scrollY - labelHeight;
+            window.scrollTo({
+              top: Math.max(0, targetY),
+              behavior: "smooth"
+            });
             setTimeout(() => {
               refreshOverlayPositions().catch(console.error);
               setHighlight(message.payload.id);

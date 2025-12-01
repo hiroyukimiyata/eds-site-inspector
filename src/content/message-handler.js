@@ -320,7 +320,33 @@ export async function handleMessage(message, sender, sendResponse) {
       case 'scroll-to-block': {
         const block = state.blocks.find(b => b.id === message.payload.id);
         if (block && block.element) {
-          block.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // ブロック要素の位置を取得
+          const rect = block.element.getBoundingClientRect();
+          const scrollY = window.scrollY || window.pageYOffset;
+          
+          // ラベルの高さを取得（オーバーレイが存在する場合）
+          // ラベルの高さ: font-size(12px) + padding-top(2px) + padding-bottom(2px) + 少し余裕 = 約25px
+          let labelHeight = 25;
+          const overlayRoot = document.getElementById('eds-inspector-overlay-root');
+          if (overlayRoot) {
+            const overlay = overlayRoot.querySelector(`[data-overlay-id="${block.id}"]`);
+            if (overlay) {
+              const label = overlay.querySelector('.eds-overlay__label');
+              if (label) {
+                const labelRect = label.getBoundingClientRect();
+                labelHeight = labelRect.height + 4; // 少し余裕を持たせる
+              }
+            }
+          }
+          
+          // ブロックの上端からラベルの高さ分だけ上にスクロール
+          const targetY = rect.top + scrollY - labelHeight;
+          
+          window.scrollTo({
+            top: Math.max(0, targetY),
+            behavior: 'smooth'
+          });
+          
           // スクロール後にオーバーレイの位置を更新
           setTimeout(() => {
             refreshOverlayPositions().catch(console.error);

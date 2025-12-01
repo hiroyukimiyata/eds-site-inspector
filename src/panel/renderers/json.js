@@ -2,7 +2,7 @@
  * JSONタブのレンダラー
  */
 import { highlightCode } from '../utils.js';
-import { createCopyButton, createSearchUI } from '../utils/file-utils.js';
+import { createCopyButton, createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
 
 /**
  * JSONタブをレンダリング
@@ -137,15 +137,35 @@ export function renderJson(state) {
           pre.appendChild(code);
           content.innerHTML = '';
           
+          // 検索キーを生成（URLをキーにする）
+          const searchKey = `json-${jsonFile.url}`;
+          
           // コピーボタンと検索UIを追加（既に存在しない場合のみ）
           if (!rightSection.querySelector('.eds-copy-button')) {
             const copyBtn = createCopyButton(jsonString, null, null);
             copyBtn.style.cssText = 'background: transparent; border: none; cursor: pointer; padding: 4px 8px; font-size: 14px; color: var(--muted); transition: color 0.2s;';
             rightSection.appendChild(copyBtn);
+            
+            // 全画面表示ボタンを追加
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.innerHTML = '⛶';
+            fullscreenBtn.title = 'Fullscreen view';
+            fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; opacity: 0.7;';
+            fullscreenBtn.addEventListener('mouseenter', () => {
+              fullscreenBtn.style.opacity = '1';
+              fullscreenBtn.style.background = 'var(--bg)';
+            });
+            fullscreenBtn.addEventListener('mouseleave', () => {
+              fullscreenBtn.style.opacity = '0.7';
+              fullscreenBtn.style.background = 'transparent';
+            });
+            fullscreenBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              createFullscreenViewer(jsonString, code.innerHTML, jsonFile.pathname || jsonFile.url, searchKey);
+            });
+            rightSection.appendChild(fullscreenBtn);
           }
           
-          // 検索キーを生成（URLをキーにする）
-          const searchKey = `json-${jsonFile.url}`;
           const searchUI = createSearchUI(content, jsonString, searchKey);
           
           const codeContainer = document.createElement('div');

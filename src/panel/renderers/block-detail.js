@@ -3,7 +3,7 @@
  */
 import { sendToContent } from '../utils.js';
 import { processCode } from '../utils/code-processor.js';
-import { createCopyButton as createCopyButtonUtil, createSearchUI } from '../utils/file-utils.js';
+import { createCopyButton as createCopyButtonUtil, createSearchUI, createFullscreenViewer } from '../utils/file-utils.js';
 
 /**
  * ブロック詳細をレンダリング（開閉状態を保持）
@@ -149,7 +149,9 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   ssrContainer.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
   
   const ssrHeader = document.createElement('div');
-  ssrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
+  ssrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;';
+  
+  const ssrHeaderLeft = document.createElement('div');
   
   const ssrTitle = document.createElement('div');
   ssrTitle.textContent = 'Markup (SSR)';
@@ -169,8 +171,32 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   }
   ssrDocInfo.style.cssText = 'font-size: 10px; color: var(--text-muted);';
   
-  ssrHeader.appendChild(ssrTitle);
-  ssrHeader.appendChild(ssrDocInfo);
+  ssrHeaderLeft.appendChild(ssrTitle);
+  ssrHeaderLeft.appendChild(ssrDocInfo);
+  
+  // SSR全画面表示ボタン
+  const ssrFullscreenBtn = document.createElement('button');
+  ssrFullscreenBtn.innerHTML = '⛶';
+  ssrFullscreenBtn.title = 'Fullscreen view';
+  ssrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  ssrFullscreenBtn.addEventListener('mouseenter', () => {
+    ssrFullscreenBtn.style.opacity = '1';
+    ssrFullscreenBtn.style.background = 'var(--bg)';
+  });
+  ssrFullscreenBtn.addEventListener('mouseleave', () => {
+    ssrFullscreenBtn.style.opacity = '0.7';
+    ssrFullscreenBtn.style.background = 'transparent';
+  });
+  ssrFullscreenBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (ssrMarkupContent) {
+      const processedCode = processCode(ssrMarkupContent, 'html', 'Markup (SSR)');
+      createFullscreenViewer(ssrMarkupContent, processedCode, 'Markup (SSR)', `markup-ssr-fullscreen-${detail.block.id}`);
+    }
+  });
+  
+  ssrHeader.appendChild(ssrHeaderLeft);
+  ssrHeader.appendChild(ssrFullscreenBtn);
   
   const ssrCodeContainer = document.createElement('div');
   ssrCodeContainer.style.cssText = 'position: relative;';
@@ -208,7 +234,9 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   csrContainer.style.cssText = 'border: 1px solid var(--border); border-radius: 8px; overflow: hidden;';
   
   const csrHeader = document.createElement('div');
-  csrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
+  csrHeader.style.cssText = 'padding: 8px 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;';
+  
+  const csrHeaderLeft = document.createElement('div');
   
   const csrTitle = document.createElement('div');
   csrTitle.textContent = 'Markup (CSR)';
@@ -218,8 +246,32 @@ async function renderBlockDetailWithExpandedPaths(state, detail, refresh, tabId,
   const csrSpacer = document.createElement('div');
   csrSpacer.style.cssText = 'font-size: 10px; height: 14px;'; // ssrDocInfoと同じ高さ
   
-  csrHeader.appendChild(csrTitle);
-  csrHeader.appendChild(csrSpacer);
+  csrHeaderLeft.appendChild(csrTitle);
+  csrHeaderLeft.appendChild(csrSpacer);
+  
+  // CSR全画面表示ボタン
+  const csrFullscreenBtn = document.createElement('button');
+  csrFullscreenBtn.innerHTML = '⛶';
+  csrFullscreenBtn.title = 'Fullscreen view';
+  csrFullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  csrFullscreenBtn.addEventListener('mouseenter', () => {
+    csrFullscreenBtn.style.opacity = '1';
+    csrFullscreenBtn.style.background = 'var(--bg)';
+  });
+  csrFullscreenBtn.addEventListener('mouseleave', () => {
+    csrFullscreenBtn.style.opacity = '0.7';
+    csrFullscreenBtn.style.background = 'transparent';
+  });
+  csrFullscreenBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (csrMarkupContent && csrMarkupContent !== 'No markup captured for this block.') {
+      const processedCode = processCode(csrMarkupContent, 'html', 'Markup (CSR)');
+      createFullscreenViewer(csrMarkupContent, processedCode, 'Markup (CSR)', `markup-csr-fullscreen-${detail.block.id}`);
+    }
+  });
+  
+  csrHeader.appendChild(csrHeaderLeft);
+  csrHeader.appendChild(csrFullscreenBtn);
   
   const csrCodeContainer = document.createElement('div');
   csrCodeContainer.style.cssText = 'position: relative;';
@@ -409,6 +461,26 @@ function createAssetItem(asset, expandedPaths, blocksWithSameName, currentBlockI
     copyBtn = rightSection.querySelector('.eds-copy-button');
     rightSection.appendChild(pill);
   }
+  
+  // 全画面表示ボタンを追加
+  const fullscreenBtn = document.createElement('button');
+  fullscreenBtn.innerHTML = '⛶';
+  fullscreenBtn.title = 'Fullscreen view';
+  fullscreenBtn.style.cssText = 'background: transparent; border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 14px; transition: all 0.2s; flex-shrink: 0; opacity: 0.7;';
+  fullscreenBtn.addEventListener('mouseenter', () => {
+    fullscreenBtn.style.opacity = '1';
+    fullscreenBtn.style.background = 'var(--bg)';
+  });
+  fullscreenBtn.addEventListener('mouseleave', () => {
+    fullscreenBtn.style.opacity = '0.7';
+    fullscreenBtn.style.background = 'transparent';
+  });
+  fullscreenBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const processedCode = processCode(rawContent, asset.type, asset.path);
+    createFullscreenViewer(rawContent, processedCode, asset.path, `block-asset-fullscreen-${asset.path}`);
+  });
+  rightSection.appendChild(fullscreenBtn);
   
   const content = document.createElement('div');
   content.className = 'eds-asset-content';
