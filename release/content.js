@@ -75,6 +75,18 @@
     }
   });
 
+  // src/content/utils/category.js
+  function isDefaultContent(item) {
+    if (!item || !item.category) {
+      return false;
+    }
+    return item.category !== "block" && item.category !== "button" && item.category !== "icon";
+  }
+  var init_category = __esm({
+    "src/content/utils/category.js"() {
+    }
+  });
+
   // src/content/overlay/manager.js
   function createOverlayRoot() {
     let root = document.getElementById(UI_IDS.overlayRoot);
@@ -106,127 +118,146 @@
       return extensionAvailable;
     }
     lastExtensionCheck = now;
+    if (pingTimeoutId !== null) {
+      clearTimeout(pingTimeoutId);
+      pingTimeoutId = null;
+    }
     try {
+      const storageResult = await chrome.storage.local.get("eds-devtools-open");
+      const devToolsOpen = storageResult && storageResult["eds-devtools-open"];
+      if (devToolsOpen) {
+        extensionAvailable = true;
+        return true;
+      }
       const response = await new Promise((resolve) => {
+        let resolved = false;
         chrome.runtime.sendMessage({ type: "ping" }, (response2) => {
+          if (resolved) return;
+          resolved = true;
+          if (pingTimeoutId !== null) {
+            clearTimeout(pingTimeoutId);
+            pingTimeoutId = null;
+          }
           if (chrome.runtime.lastError) {
             resolve(false);
           } else {
             resolve(true);
           }
         });
-        setTimeout(() => resolve(false), 200);
+        pingTimeoutId = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            pingTimeoutId = null;
+            resolve(false);
+          }
+        }, PING_TIMEOUT);
       });
       extensionAvailable = response;
       return extensionAvailable;
     } catch (e) {
+      if (pingTimeoutId !== null) {
+        clearTimeout(pingTimeoutId);
+        pingTimeoutId = null;
+      }
       extensionAvailable = false;
       return false;
     }
   }
   async function refreshOverlayPositions() {
-    const root = document.getElementById(UI_IDS.overlayRoot);
-    if (!root) {
-      console.warn("[EDS Inspector] Overlay root not found");
+    if (isRefreshing) {
       return;
     }
-    ensureOverlayRootSizing(root);
-    const extensionAvailable2 = await checkExtensionAvailable2();
-    if (!extensionAvailable2) {
-      console.log("[EDS Inspector] Extension not available, hiding overlays");
-      root.style.display = "none";
-      state.overlaysVisible = false;
+    if (refreshTimeoutId !== null) {
       return;
     }
-    if (!state.overlaysVisible) {
-      console.log("[EDS Inspector] Overlays not visible, hiding root. State:", {
-        overlaysVisible: state.overlaysVisible,
-        overlaysEnabled: state.overlaysEnabled,
-        overlaysCount: state.overlays.length
-      });
-      root.style.display = "none";
-      return;
-    }
-    if (state.overlays.length === 0) {
-      console.log("[EDS Inspector] No overlays to display");
-      return;
-    }
-    root.style.display = "block";
-    const viewportOffset = { x: window.scrollX, y: window.scrollY };
-    let displayedCount = 0;
-    let defaultContentDisplayedCount = 0;
-    state.overlays.forEach((overlay) => {
-      const { element, target } = overlay;
-      if (!target || !element) {
-        console.warn("[EDS Inspector] Invalid overlay:", overlay);
+    refreshTimeoutId = requestAnimationFrame(async () => {
+      refreshTimeoutId = null;
+      await performRefresh();
+    });
+  }
+  async function performRefresh() {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    try {
+      const root = document.getElementById(UI_IDS.overlayRoot);
+      if (!root) {
+        if (true) {
+          console.warn("[EDS Inspector] Overlay root not found");
+        }
         return;
       }
-      const rect = target.getBoundingClientRect();
-      element.style.transform = `translate(${rect.left + viewportOffset.x}px, ${rect.top + viewportOffset.y}px)`;
-      element.style.width = `${rect.width}px`;
-      element.style.height = `${rect.height}px`;
-      let enabled = false;
-      if (overlay.item.id.startsWith("section-")) {
-        enabled = state.overlaysEnabled.sections;
-      } else {
-        const isDefaultContent = overlay.item.category && overlay.item.category !== "block" && overlay.item.category !== "button" && overlay.item.category !== "icon";
-        if (isDefaultContent) {
-          enabled = state.overlaysEnabled.defaultContent;
-          if (!enabled) {
-            console.log("[EDS Inspector] Default Content overlay disabled:", {
-              id: overlay.item.id,
-              name: overlay.item.name,
-              category: overlay.item.category,
-              overlaysEnabled: state.overlaysEnabled,
-              visible: overlay.visible
-            });
+      ensureOverlayRootSizing(root);
+      const extensionAvailable2 = await checkExtensionAvailable2();
+      if (state.overlays.length === 0) {
+        if (lastDisplayState !== "none") {
+          root.style.display = "none";
+          lastDisplayState = "none";
+        }
+        return;
+      }
+      const shouldShow = extensionAvailable2 && state.overlaysVisible;
+      const newDisplayState = shouldShow ? "block" : "none";
+      if (lastDisplayState !== newDisplayState) {
+        root.style.display = newDisplayState;
+        lastDisplayState = newDisplayState;
+      }
+      if (!shouldShow) {
+        return;
+      }
+      const viewportOffset = { x: window.scrollX, y: window.scrollY };
+      let displayedCount = 0;
+      let defaultContentDisplayedCount = 0;
+      state.overlays.forEach((overlay) => {
+        const { element, target } = overlay;
+        if (!target || !element) {
+          if (true) {
+            console.warn("[EDS Inspector] Invalid overlay:", overlay);
           }
+          return;
+        }
+        const rect = target.getBoundingClientRect();
+        element.style.transform = `translate(${rect.left + viewportOffset.x}px, ${rect.top + viewportOffset.y}px)`;
+        element.style.width = `${rect.width}px`;
+        element.style.height = `${rect.height}px`;
+        let enabled = false;
+        if (overlay.item.id.startsWith("section-")) {
+          enabled = state.overlaysEnabled.sections;
         } else {
-          enabled = state.overlaysEnabled.blocks;
+          if (isDefaultContent(overlay.item)) {
+            enabled = state.overlaysEnabled.defaultContent;
+          } else {
+            enabled = state.overlaysEnabled.blocks;
+          }
         }
-      }
-      const shouldDisplay = overlay.visible && enabled;
-      element.style.display = shouldDisplay ? "block" : "none";
-      if (shouldDisplay) {
-        displayedCount++;
-        const isDefaultContent = overlay.item.category && overlay.item.category !== "block" && overlay.item.category !== "button" && overlay.item.category !== "icon";
-        if (isDefaultContent) {
-          defaultContentDisplayedCount++;
+        const shouldDisplay = overlay.visible && enabled;
+        element.style.display = shouldDisplay ? "block" : "none";
+        if (shouldDisplay) {
+          displayedCount++;
+          if (isDefaultContent(overlay.item)) {
+            defaultContentDisplayedCount++;
+          }
         }
-      }
-    });
-    const defaultContentOverlays = state.overlays.filter((o) => {
-      const cat = o.item.category;
-      return cat && cat !== "block" && cat !== "button" && cat !== "icon";
-    });
-    console.log("[EDS Inspector] Refreshed overlay positions:", {
-      totalOverlays: state.overlays.length,
-      defaultContentOverlays: defaultContentOverlays.length,
-      displayedCount,
-      defaultContentDisplayedCount,
-      overlaysVisible: state.overlaysVisible,
-      overlaysEnabled: state.overlaysEnabled,
-      defaultContentDetails: defaultContentOverlays.map((o) => ({
-        id: o.item.id,
-        name: o.item.name,
-        category: o.item.category,
-        visible: o.visible,
-        enabled: state.overlaysEnabled.defaultContent
-      }))
-    });
-    if (defaultContentDisplayedCount === 0 && defaultContentOverlays.length > 0) {
-      console.warn("[EDS Inspector] No Default Content overlays displayed:", {
-        defaultContentOverlaysCount: defaultContentOverlays.length,
-        defaultContentDisplayedCount,
-        overlaysEnabled: state.overlaysEnabled,
-        defaultContentOverlays: defaultContentOverlays.map((o) => ({
-          id: o.item.id,
-          name: o.item.name,
-          category: o.item.category,
-          visible: o.visible,
-          enabled: state.overlaysEnabled.defaultContent
-        }))
       });
+      if (true) {
+        const defaultContentOverlays = state.overlays.filter((o) => isDefaultContent(o.item));
+        console.log("[EDS Inspector] Refreshed overlay positions:", {
+          totalOverlays: state.overlays.length,
+          defaultContentOverlays: defaultContentOverlays.length,
+          displayedCount,
+          defaultContentDisplayedCount,
+          overlaysVisible: state.overlaysVisible,
+          overlaysEnabled: state.overlaysEnabled
+        });
+        if (defaultContentDisplayedCount === 0 && defaultContentOverlays.length > 0) {
+          console.warn("[EDS Inspector] No Default Content overlays displayed:", {
+            defaultContentOverlaysCount: defaultContentOverlays.length,
+            defaultContentDisplayedCount,
+            overlaysEnabled: state.overlaysEnabled
+          });
+        }
+      }
+    } finally {
+      isRefreshing = false;
     }
   }
   async function toggleOverlays() {
@@ -243,27 +274,46 @@
     const overlay = document.getElementById(UI_IDS.overlayRoot);
     if (overlay) overlay.remove();
     state.overlays = [];
+    lastDisplayState = null;
   }
   function attachGlobalListeners() {
     window.addEventListener("scroll", () => {
-      refreshOverlayPositions().catch(console.error);
+      refreshOverlayPositions().catch((err) => {
+        if (true) {
+          console.error("[EDS Inspector] Error refreshing overlays:", err);
+        }
+      });
     }, true);
     window.addEventListener("resize", () => {
-      refreshOverlayPositions().catch(console.error);
+      refreshOverlayPositions().catch((err) => {
+        if (true) {
+          console.error("[EDS Inspector] Error refreshing overlays:", err);
+        }
+      });
     }, true);
     const resizeObserver = new ResizeObserver(() => {
-      refreshOverlayPositions().catch(console.error);
+      refreshOverlayPositions().catch((err) => {
+        if (true) {
+          console.error("[EDS Inspector] Error refreshing overlays:", err);
+        }
+      });
     });
     resizeObserver.observe(document.documentElement);
   }
-  var lastExtensionCheck, extensionAvailable, EXTENSION_CHECK_INTERVAL;
+  var lastExtensionCheck, extensionAvailable, pingTimeoutId, EXTENSION_CHECK_INTERVAL, PING_TIMEOUT, refreshTimeoutId, isRefreshing, lastDisplayState;
   var init_manager = __esm({
     "src/content/overlay/manager.js"() {
       init_constants();
       init_state();
+      init_category();
       lastExtensionCheck = 0;
       extensionAvailable = false;
+      pingTimeoutId = null;
       EXTENSION_CHECK_INTERVAL = 1e3;
+      PING_TIMEOUT = 500;
+      refreshTimeoutId = null;
+      isRefreshing = false;
+      lastDisplayState = null;
     }
   });
 
@@ -1521,8 +1571,7 @@
     if (type === "section") {
       el.className = "eds-overlay eds-overlay--section";
     } else {
-      const isDefaultContent = item.category && item.category !== "block";
-      if (isDefaultContent) {
+      if (isDefaultContent(item)) {
         el.className = "eds-overlay eds-overlay--default-content";
       } else {
         el.className = "eds-overlay eds-overlay--block";
@@ -1538,8 +1587,7 @@
         label.textContent = "Section";
       }
     } else {
-      const isDefaultContent = item.category && item.category !== "block";
-      const prefix = isDefaultContent ? "Default Content:" : "Block:";
+      const prefix = isDefaultContent(item) ? "Default Content:" : "Block:";
       label.textContent = `${prefix} ${item.name}`;
     }
     el.appendChild(label);
@@ -1555,6 +1603,7 @@
   var init_element = __esm({
     "src/content/overlay/element.js"() {
       init_state();
+      init_category();
     }
   });
 
@@ -1577,9 +1626,8 @@
     state.blocks.forEach((block) => {
       const el = createOverlayElement(block, "block");
       root.appendChild(el);
-      const isDefaultContent = block.category && block.category !== "block" && block.category !== "button" && block.category !== "icon";
       state.overlays.push({ element: el, target: block.element, item: block, visible: true });
-      if (isDefaultContent) {
+      if (isDefaultContent(block)) {
         console.log("[EDS Inspector] Built overlay for Default Content:", {
           id: block.id,
           name: block.name,
@@ -1589,10 +1637,7 @@
         });
       }
     });
-    const defaultContentOverlays = state.overlays.filter((o) => {
-      const cat = o.item.category;
-      return cat && cat !== "block" && cat !== "button" && cat !== "icon";
-    });
+    const defaultContentOverlays = state.overlays.filter((o) => isDefaultContent(o.item));
     console.log("[EDS Inspector] Built overlays:", {
       total: state.overlays.length,
       defaultContent: defaultContentOverlays.length,
@@ -1604,6 +1649,7 @@
       init_manager();
       init_element();
       init_state();
+      init_category();
     }
   });
 
@@ -2006,13 +2052,19 @@
             state.overlaysVisible = true;
             state.overlaysEnabled = { sections: true, blocks: true, defaultContent: true };
             setTimeout(() => {
-              console.log("[EDS Inspector Content] Final overlay refresh after init, state:", {
-                overlaysVisible: state.overlaysVisible,
-                overlaysEnabled: state.overlaysEnabled,
-                overlaysCount: state.overlays.length
-              });
+              if (true) {
+                console.log("[EDS Inspector Content] Final overlay refresh after init, state:", {
+                  overlaysVisible: state.overlaysVisible,
+                  overlaysEnabled: state.overlaysEnabled,
+                  overlaysCount: state.overlays.length
+                });
+              }
               state.overlaysVisible = true;
-              refreshOverlayPositions().catch(console.error);
+              refreshOverlayPositions().catch((err) => {
+                if (true) {
+                  console.error("[EDS Inspector Content] Error refreshing overlays:", err);
+                }
+              });
             }, 300);
             sendResponse(snapshot);
           } catch (err) {
@@ -2048,13 +2100,11 @@
             if (message.payload.key === "sections" && overlay.item.id.startsWith("section-")) {
               overlay.visible = message.payload.value;
             } else if (message.payload.key === "blocks" && overlay.item.id.startsWith("block-")) {
-              const isDefaultContent = overlay.item.category && overlay.item.category !== "block";
-              if (!isDefaultContent) {
+              if (!isDefaultContent(overlay.item)) {
                 overlay.visible = message.payload.value;
               }
             } else if (message.payload.key === "defaultContent" && overlay.item.id.startsWith("block-")) {
-              const isDefaultContent = overlay.item.category && overlay.item.category !== "block";
-              if (isDefaultContent) {
+              if (isDefaultContent(overlay.item)) {
                 overlay.visible = message.payload.value;
               }
             }
@@ -2080,16 +2130,15 @@
         }
         case "set-overlays-visible": {
           const newVisible = message.payload.visible;
-          console.log("[EDS Inspector Content] set-overlays-visible:", {
-            old: state.overlaysVisible,
-            new: newVisible,
-            overlaysCount: state.overlays.length
-          });
+          if (true) {
+            console.log("[EDS Inspector Content] set-overlays-visible:", {
+              old: state.overlaysVisible,
+              new: newVisible,
+              overlaysCount: state.overlays.length
+            });
+          }
           state.overlaysVisible = newVisible;
           await refreshOverlayPositions();
-          setTimeout(() => {
-            refreshOverlayPositions().catch(console.error);
-          }, 100);
           sendResponse({ ok: true, visible: state.overlaysVisible });
           break;
         }
@@ -2126,7 +2175,11 @@
               behavior: "smooth"
             });
             setTimeout(() => {
-              refreshOverlayPositions().catch(console.error);
+              refreshOverlayPositions().catch((err) => {
+                if (true) {
+                  console.error("[EDS Inspector Content] Error refreshing overlays:", err);
+                }
+              });
               setHighlight(message.payload.id);
             }, 300);
           }
@@ -2225,6 +2278,7 @@
       init_block_assets();
       init_auto_update();
       init_analyzer();
+      init_category();
     }
   });
 

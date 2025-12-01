@@ -11,6 +11,7 @@ import { formatHtmlSnippet, computeElementPath, findElementByPath } from './util
 import { getBlockAssets } from './api/block-assets.js';
 import { enableAutoUpdate, disableAutoUpdate } from './utils/auto-update.js';
 import { init } from './analyzer.js';
+import { isDefaultContent } from './utils/category.js';
 
 /**
  * 状態変更を通知
@@ -212,14 +213,20 @@ export async function handleMessage(message, sender, sendResponse) {
           // ここでは呼ばない（ブリンクを防ぐため）
           // DOMが完全に読み込まれるまで少し待ってから一度だけ更新
           setTimeout(() => {
-            console.log('[EDS Inspector Content] Final overlay refresh after init, state:', {
-              overlaysVisible: state.overlaysVisible,
-              overlaysEnabled: state.overlaysEnabled,
-              overlaysCount: state.overlays.length
-            });
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[EDS Inspector Content] Final overlay refresh after init, state:', {
+                overlaysVisible: state.overlaysVisible,
+                overlaysEnabled: state.overlaysEnabled,
+                overlaysCount: state.overlays.length
+              });
+            }
             // 状態を再確認してから更新
             state.overlaysVisible = true;
-            refreshOverlayPositions().catch(console.error);
+            refreshOverlayPositions().catch(err => {
+              if (process.env.NODE_ENV === 'development') {
+                console.error('[EDS Inspector Content] Error refreshing overlays:', err);
+              }
+            });
           }, 300);
           
           sendResponse(snapshot);
@@ -258,14 +265,12 @@ export async function handleMessage(message, sender, sendResponse) {
             overlay.visible = message.payload.value;
           } else if (message.payload.key === 'blocks' && overlay.item.id.startsWith('block-')) {
             // Blocksのみ（Default Contentは除外）
-            const isDefaultContent = overlay.item.category && overlay.item.category !== 'block';
-            if (!isDefaultContent) {
+            if (!isDefaultContent(overlay.item)) {
               overlay.visible = message.payload.value;
             }
           } else if (message.payload.key === 'defaultContent' && overlay.item.id.startsWith('block-')) {
             // Default Contentのみ
-            const isDefaultContent = overlay.item.category && overlay.item.category !== 'block';
-            if (isDefaultContent) {
+            if (isDefaultContent(overlay.item)) {
               overlay.visible = message.payload.value;
             }
           }
@@ -292,18 +297,16 @@ export async function handleMessage(message, sender, sendResponse) {
       }
       case 'set-overlays-visible': {
         const newVisible = message.payload.visible;
-        console.log('[EDS Inspector Content] set-overlays-visible:', {
-          old: state.overlaysVisible,
-          new: newVisible,
-          overlaysCount: state.overlays.length
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[EDS Inspector Content] set-overlays-visible:', {
+            old: state.overlaysVisible,
+            new: newVisible,
+            overlaysCount: state.overlays.length
+          });
+        }
         state.overlaysVisible = newVisible;
-        // 状態を確実に反映するため、少し待ってから更新
+        // 状態を確実に反映するため、更新
         await refreshOverlayPositions();
-        // 念のため、もう一度更新（確実に表示されるように）
-        setTimeout(() => {
-          refreshOverlayPositions().catch(console.error);
-        }, 100);
         sendResponse({ ok: true, visible: state.overlaysVisible });
         break;
       }
@@ -349,7 +352,11 @@ export async function handleMessage(message, sender, sendResponse) {
           
           // スクロール後にオーバーレイの位置を更新
           setTimeout(() => {
-            refreshOverlayPositions().catch(console.error);
+            refreshOverlayPositions().catch(err => {
+              if (process.env.NODE_ENV === 'development') {
+                console.error('[EDS Inspector Content] Error refreshing overlays:', err);
+              }
+            });
             setHighlight(message.payload.id);
           }, 300);
         }

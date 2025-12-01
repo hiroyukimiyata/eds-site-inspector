@@ -2,6 +2,7 @@
  * オーバーレイ要素の作成
  */
 import { state } from '../state.js';
+import { isDefaultContent } from '../utils/category.js';
 
 /**
  * オーバーレイ要素を作成
@@ -14,8 +15,7 @@ export function createOverlayElement(item, type) {
     el.className = 'eds-overlay eds-overlay--section';
   } else {
     // ブロックのカテゴリに基づいて、BlockかDefault Contentかを判断
-    const isDefaultContent = item.category && item.category !== 'block';
-    if (isDefaultContent) {
+    if (isDefaultContent(item)) {
       el.className = 'eds-overlay eds-overlay--default-content';
     } else {
       el.className = 'eds-overlay eds-overlay--block';
@@ -35,8 +35,7 @@ export function createOverlayElement(item, type) {
     }
   } else {
     // ブロックのカテゴリに基づいて、BlockかDefault Contentかを判断
-    const isDefaultContent = item.category && item.category !== 'block';
-    const prefix = isDefaultContent ? 'Default Content:' : 'Block:';
+    const prefix = isDefaultContent(item) ? 'Default Content:' : 'Block:';
     label.textContent = `${prefix} ${item.name}`;
   }
   

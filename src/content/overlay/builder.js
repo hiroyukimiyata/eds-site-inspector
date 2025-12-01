@@ -4,6 +4,7 @@
 import { createOverlayRoot, refreshOverlayPositions } from './manager.js';
 import { createOverlayElement } from './element.js';
 import { state } from '../state.js';
+import { isDefaultContent } from '../utils/category.js';
 
 /**
  * オーバーレイを構築
@@ -30,14 +31,10 @@ export function buildOverlays() {
     const el = createOverlayElement(block, 'block');
     root.appendChild(el);
     // overlay.visibleは常にtrueに設定（表示制御はrefreshOverlayPositionsで行う）
-    const isDefaultContent = block.category && 
-                             block.category !== 'block' && 
-                             block.category !== 'button' && 
-                             block.category !== 'icon';
     state.overlays.push({ element: el, target: block.element, item: block, visible: true });
     
     // デバッグログ
-    if (isDefaultContent) {
+    if (isDefaultContent(block)) {
       console.log('[EDS Inspector] Built overlay for Default Content:', {
         id: block.id,
         name: block.name,
@@ -48,10 +45,7 @@ export function buildOverlays() {
     }
   });
   
-  const defaultContentOverlays = state.overlays.filter(o => {
-    const cat = o.item.category;
-    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
-  });
+  const defaultContentOverlays = state.overlays.filter(o => isDefaultContent(o.item));
   console.log('[EDS Inspector] Built overlays:', {
     total: state.overlays.length,
     defaultContent: defaultContentOverlays.length,

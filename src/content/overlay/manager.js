@@ -3,6 +3,7 @@
  */
 import { UI_IDS } from '../constants.js';
 import { state } from '../state.js';
+import { isDefaultContent } from '../utils/category.js';
 
 /**
  * オーバーレイルート要素を作成
@@ -42,7 +43,9 @@ export function ensureOverlayRootSizing(root) {
  */
 let lastExtensionCheck = 0;
 let extensionAvailable = false;
+let pingTimeoutId = null;
 const EXTENSION_CHECK_INTERVAL = 1000; // 1秒ごとにチェック
+const PING_TIMEOUT = 500; // pingのタイムアウト（ms）
 
 export async function checkExtensionAvailable() {
   const now = Date.now();
@@ -53,162 +56,214 @@ export async function checkExtensionAvailable() {
   
   lastExtensionCheck = now;
   
+  // 既存のタイムアウトをクリーンアップ
+  if (pingTimeoutId !== null) {
+    clearTimeout(pingTimeoutId);
+    pingTimeoutId = null;
+  }
+  
   try {
-    // ポップアップまたはDevToolsが開いているかどうかを確認
+    // まず、chrome.storage.localからDevToolsが開いているかどうかを確認
+    // これにより、DevTools操作中でも確実に検出できる
+    const storageResult = await chrome.storage.local.get('eds-devtools-open');
+    const devToolsOpen = storageResult && storageResult['eds-devtools-open'];
+    
+    if (devToolsOpen) {
+      // DevToolsが開いている場合は、確実にtrueを返す
+      extensionAvailable = true;
+      return true;
+    }
+    
+    // DevToolsが開いていない場合、ポップアップが開いているかどうかを確認
     // chrome.runtime.sendMessageでメッセージを送信して、レスポンスがあるかどうかで確認
     const response = await new Promise((resolve) => {
+      let resolved = false;
+      
       chrome.runtime.sendMessage({ type: 'ping' }, (response) => {
+        if (resolved) return; // 既にタイムアウトで解決済みの場合は無視
+        resolved = true;
+        
+        // 既存のタイムアウトをクリーンアップ
+        if (pingTimeoutId !== null) {
+          clearTimeout(pingTimeoutId);
+          pingTimeoutId = null;
+        }
+        
         // エラーが発生した場合（ポップアップもDevToolsも存在しない場合）
         if (chrome.runtime.lastError) {
           resolve(false);
         } else {
-          // レスポンスがある場合は、ポップアップまたはDevToolsが開いている
+          // レスポンスがある場合は、ポップアップが開いている
           resolve(true);
         }
       });
-      // タイムアウト（200ms以内にレスポンスがない場合は存在しないと判断）
-      setTimeout(() => resolve(false), 200);
+      
+      // タイムアウトを設定
+      pingTimeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          pingTimeoutId = null;
+          resolve(false);
+        }
+      }, PING_TIMEOUT);
     });
     
+    // ポップアップが開いている場合はtrue、そうでなければfalse
+    // ポップアップが非表示 AND DevToolsが非表示の場合のみfalse
     extensionAvailable = response;
     return extensionAvailable;
   } catch (e) {
-    // エラーの場合は存在しないと判断
+    // タイムアウトをクリーンアップ
+    if (pingTimeoutId !== null) {
+      clearTimeout(pingTimeoutId);
+      pingTimeoutId = null;
+    }
+    
+    // エラーが発生した場合、安全のためfalseを返す
+    // （ちらつきを防ぐため、前回の状態を保持する）
     extensionAvailable = false;
     return false;
   }
 }
 
 /**
- * オーバーレイの位置を更新
+ * オーバーレイの位置を更新（スロットリング付き）
  */
+let refreshTimeoutId = null;
+let isRefreshing = false;
+const REFRESH_THROTTLE = 16; // 約60fps（16ms）
+
 export async function refreshOverlayPositions() {
-  const root = document.getElementById(UI_IDS.overlayRoot);
-  if (!root) {
-    console.warn('[EDS Inspector] Overlay root not found');
-    return;
-  }
-  ensureOverlayRootSizing(root);
-  
-  // ポップアップまたはDevToolsが開いているかどうかを確認
-  const extensionAvailable = await checkExtensionAvailable();
-  if (!extensionAvailable) {
-    // ポップアップもDevToolsも閉じている場合は、オーバーレイを非表示にする
-    console.log('[EDS Inspector] Extension not available, hiding overlays');
-    root.style.display = 'none';
-    state.overlaysVisible = false;
+  // 既に更新中の場合はスキップ
+  if (isRefreshing) {
     return;
   }
   
-  // オーバーレイ全体が非表示の場合は、ルート要素を非表示にする
-  if (!state.overlaysVisible) {
-    console.log('[EDS Inspector] Overlays not visible, hiding root. State:', {
-      overlaysVisible: state.overlaysVisible,
-      overlaysEnabled: state.overlaysEnabled,
-      overlaysCount: state.overlays.length
-    });
-    root.style.display = 'none';
-    return;
+  // スロットリング: 連続呼び出しを制限
+  if (refreshTimeoutId !== null) {
+    return; // 既にスケジュール済み
   }
   
-  // オーバーレイが存在しない場合は何もしない
-  if (state.overlays.length === 0) {
-    console.log('[EDS Inspector] No overlays to display');
-    return;
-  }
+  refreshTimeoutId = requestAnimationFrame(async () => {
+    refreshTimeoutId = null;
+    await performRefresh();
+  });
+}
+
+/**
+ * 実際の更新処理
+ */
+let lastDisplayState = null; // 前回の表示状態を保持（ちらつき防止）
+
+async function performRefresh() {
+  if (isRefreshing) return;
+  isRefreshing = true;
   
-  root.style.display = 'block';
-  const viewportOffset = { x: window.scrollX, y: window.scrollY };
-  
-  let displayedCount = 0;
-  let defaultContentDisplayedCount = 0;
-  state.overlays.forEach((overlay) => {
-    const { element, target } = overlay;
-    if (!target || !element) {
-      console.warn('[EDS Inspector] Invalid overlay:', overlay);
+  try {
+    const root = document.getElementById(UI_IDS.overlayRoot);
+    if (!root) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[EDS Inspector] Overlay root not found');
+      }
       return;
     }
-    const rect = target.getBoundingClientRect();
-    element.style.transform = `translate(${rect.left + viewportOffset.x}px, ${rect.top + viewportOffset.y}px)`;
-    element.style.width = `${rect.width}px`;
-    element.style.height = `${rect.height}px`;
-    // オーバーレイ全体が表示されている場合のみ、個別のオーバーレイの表示状態を確認
-    let enabled = false;
-    if (overlay.item.id.startsWith('section-')) {
-      enabled = state.overlaysEnabled.sections;
-    } else {
-      // Default Contentかどうかを判定（buttonとiconは除外）
-      const isDefaultContent = overlay.item.category && 
-                               overlay.item.category !== 'block' && 
-                               overlay.item.category !== 'button' && 
-                               overlay.item.category !== 'icon';
-      if (isDefaultContent) {
-        // Default Content
-        enabled = state.overlaysEnabled.defaultContent;
-        // デバッグログ
-        if (!enabled) {
-          console.log('[EDS Inspector] Default Content overlay disabled:', {
-            id: overlay.item.id,
-            name: overlay.item.name,
-            category: overlay.item.category,
-            overlaysEnabled: state.overlaysEnabled,
-            visible: overlay.visible
-          });
+    
+    ensureOverlayRootSizing(root);
+    
+    // ポップアップまたはDevToolsが開いているかどうかを確認
+    // ポップアップが非表示 AND DevToolsが非表示の場合のみ、オーバーレイを非表示にする
+    const extensionAvailable = await checkExtensionAvailable();
+    
+    // オーバーレイが存在しない場合は非表示にする
+    if (state.overlays.length === 0) {
+      if (lastDisplayState !== 'none') {
+        root.style.display = 'none';
+        lastDisplayState = 'none';
+      }
+      return;
+    }
+    
+    // 表示状態を決定: 拡張機能が利用可能 かつ state.overlaysVisibleがtrueの場合のみ表示
+    const shouldShow = extensionAvailable && state.overlaysVisible;
+    const newDisplayState = shouldShow ? 'block' : 'none';
+    
+    // ちらつき防止: 状態が変わらない場合はdisplayを変更しない
+    if (lastDisplayState !== newDisplayState) {
+      root.style.display = newDisplayState;
+      lastDisplayState = newDisplayState;
+    }
+    
+    // 非表示の場合は、ここで終了
+    if (!shouldShow) {
+      return;
+    }
+    const viewportOffset = { x: window.scrollX, y: window.scrollY };
+    
+    let displayedCount = 0;
+    let defaultContentDisplayedCount = 0;
+    
+    state.overlays.forEach((overlay) => {
+      const { element, target } = overlay;
+      if (!target || !element) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[EDS Inspector] Invalid overlay:', overlay);
         }
+        return;
+      }
+      
+      const rect = target.getBoundingClientRect();
+      element.style.transform = `translate(${rect.left + viewportOffset.x}px, ${rect.top + viewportOffset.y}px)`;
+      element.style.width = `${rect.width}px`;
+      element.style.height = `${rect.height}px`;
+      
+      // オーバーレイ全体が表示されている場合のみ、個別のオーバーレイの表示状態を確認
+      let enabled = false;
+      if (overlay.item.id.startsWith('section-')) {
+        enabled = state.overlaysEnabled.sections;
       } else {
-        // Blocks（categoryが'block'、'button'、'icon'または未定義）
-        enabled = state.overlaysEnabled.blocks;
+        // Default Contentかどうかを判定
+        if (isDefaultContent(overlay.item)) {
+          enabled = state.overlaysEnabled.defaultContent;
+        } else {
+          // Blocks（categoryが'block'、'button'、'icon'または未定義）
+          enabled = state.overlaysEnabled.blocks;
+        }
       }
-    }
-    const shouldDisplay = overlay.visible && enabled;
-    element.style.display = shouldDisplay ? 'block' : 'none';
-    if (shouldDisplay) {
-      displayedCount++;
-      const isDefaultContent = overlay.item.category && 
-                               overlay.item.category !== 'block' && 
-                               overlay.item.category !== 'button' && 
-                               overlay.item.category !== 'icon';
-      if (isDefaultContent) {
-        defaultContentDisplayedCount++;
+      
+      const shouldDisplay = overlay.visible && enabled;
+      element.style.display = shouldDisplay ? 'block' : 'none';
+      
+      if (shouldDisplay) {
+        displayedCount++;
+        if (isDefaultContent(overlay.item)) {
+          defaultContentDisplayedCount++;
+        }
       }
-    }
-  });
-  
-  // デバッグログ
-  const defaultContentOverlays = state.overlays.filter(o => {
-    const cat = o.item.category;
-    return cat && cat !== 'block' && cat !== 'button' && cat !== 'icon';
-  });
-  
-  console.log('[EDS Inspector] Refreshed overlay positions:', {
-    totalOverlays: state.overlays.length,
-    defaultContentOverlays: defaultContentOverlays.length,
-    displayedCount,
-    defaultContentDisplayedCount,
-    overlaysVisible: state.overlaysVisible,
-    overlaysEnabled: state.overlaysEnabled,
-    defaultContentDetails: defaultContentOverlays.map(o => ({
-      id: o.item.id,
-      name: o.item.name,
-      category: o.item.category,
-      visible: o.visible,
-      enabled: state.overlaysEnabled.defaultContent
-    }))
-  });
-  
-  if (defaultContentDisplayedCount === 0 && defaultContentOverlays.length > 0) {
-    console.warn('[EDS Inspector] No Default Content overlays displayed:', {
-      defaultContentOverlaysCount: defaultContentOverlays.length,
-      defaultContentDisplayedCount,
-      overlaysEnabled: state.overlaysEnabled,
-      defaultContentOverlays: defaultContentOverlays.map(o => ({
-        id: o.item.id,
-        name: o.item.name,
-        category: o.item.category,
-        visible: o.visible,
-        enabled: state.overlaysEnabled.defaultContent
-      }))
     });
+    
+    // デバッグログ（開発モードでのみ出力）
+    if (process.env.NODE_ENV === 'development') {
+      const defaultContentOverlays = state.overlays.filter(o => isDefaultContent(o.item));
+      
+      console.log('[EDS Inspector] Refreshed overlay positions:', {
+        totalOverlays: state.overlays.length,
+        defaultContentOverlays: defaultContentOverlays.length,
+        displayedCount,
+        defaultContentDisplayedCount,
+        overlaysVisible: state.overlaysVisible,
+        overlaysEnabled: state.overlaysEnabled
+      });
+      
+      if (defaultContentDisplayedCount === 0 && defaultContentOverlays.length > 0) {
+        console.warn('[EDS Inspector] No Default Content overlays displayed:', {
+          defaultContentOverlaysCount: defaultContentOverlays.length,
+          defaultContentDisplayedCount,
+          overlaysEnabled: state.overlaysEnabled
+        });
+      }
+    }
+  } finally {
+    isRefreshing = false;
   }
 }
 
@@ -237,15 +292,36 @@ export function destroy() {
   const overlay = document.getElementById(UI_IDS.overlayRoot);
   if (overlay) overlay.remove();
   state.overlays = [];
+  lastDisplayState = null; // 状態をリセット
 }
 
 /**
  * グローバルリスナーをアタッチ
  */
 export function attachGlobalListeners() {
-  window.addEventListener('scroll', () => { refreshOverlayPositions().catch(console.error); }, true);
-  window.addEventListener('resize', () => { refreshOverlayPositions().catch(console.error); }, true);
-  const resizeObserver = new ResizeObserver(() => { refreshOverlayPositions().catch(console.error); });
+  window.addEventListener('scroll', () => { 
+    refreshOverlayPositions().catch(err => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[EDS Inspector] Error refreshing overlays:', err);
+      }
+    }); 
+  }, true);
+  
+  window.addEventListener('resize', () => { 
+    refreshOverlayPositions().catch(err => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[EDS Inspector] Error refreshing overlays:', err);
+      }
+    }); 
+  }, true);
+  
+  const resizeObserver = new ResizeObserver(() => { 
+    refreshOverlayPositions().catch(err => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[EDS Inspector] Error refreshing overlays:', err);
+      }
+    }); 
+  });
   resizeObserver.observe(document.documentElement);
 }
 
