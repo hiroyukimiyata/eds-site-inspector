@@ -863,7 +863,7 @@
             return;
           }
           let ssrElement = null;
-          if (mainSSR) {
+          if (ssrDocuments.size > 0) {
             try {
               if (blockName === "fragment") {
                 const dataPath = liveElement.getAttribute("data-path");
@@ -917,7 +917,7 @@
                   }
                 }
               }
-              if (!ssrElement && mainLive.contains(liveElement)) {
+              if (!ssrElement && mainLive.contains(liveElement) && mainSSR) {
                 const path = computeElementPath(liveElement, mainLive);
                 const pathBasedElement = findElementByPath(mainSSR, path);
                 if (pathBasedElement && blockName !== "header" && blockName !== "footer") {
@@ -936,6 +936,34 @@
                   }
                 } else if (pathBasedElement) {
                   ssrElement = pathBasedElement;
+                }
+                if (!ssrElement) {
+                  for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                    if (ssrDoc === mainSSR?.ownerDocument) continue;
+                    const mainSSRInDoc = ssrDoc.querySelector("main") || ssrDoc;
+                    const pathBasedElementInDoc = findElementByPath(mainSSRInDoc, path);
+                    if (pathBasedElementInDoc && blockName !== "header" && blockName !== "footer") {
+                      let current = pathBasedElementInDoc;
+                      let foundBlockElement = null;
+                      while (current && current !== mainSSRInDoc) {
+                        const classList = Array.from(current.classList || []);
+                        if (classList.includes(blockName)) {
+                          foundBlockElement = current;
+                          break;
+                        }
+                        current = current.parentElement;
+                      }
+                      if (foundBlockElement) {
+                        ssrElement = foundBlockElement;
+                        console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, "via path-based search", ssrElement);
+                        break;
+                      }
+                    } else if (pathBasedElementInDoc) {
+                      ssrElement = pathBasedElementInDoc;
+                      console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, "via path-based search", ssrElement);
+                      break;
+                    }
+                  }
                 }
               }
               if (!ssrElement) {
@@ -1022,7 +1050,7 @@
             return;
           }
           let ssrElement = null;
-          if (mainSSR) {
+          if (ssrDocuments.size > 0) {
             try {
               const allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
               const liveIndex = Array.from(allLiveElements).indexOf(liveElement);
@@ -1042,7 +1070,7 @@
                   }
                 }
               }
-              if (!ssrElement && mainLive.contains(liveElement)) {
+              if (!ssrElement && mainLive.contains(liveElement) && mainSSR) {
                 const path = computeElementPath(liveElement, mainLive);
                 const pathBasedElement = findElementByPath(mainSSR, path);
                 if (pathBasedElement && blockName !== "header" && blockName !== "footer") {
@@ -1061,6 +1089,34 @@
                   }
                 } else if (pathBasedElement) {
                   ssrElement = pathBasedElement;
+                }
+                if (!ssrElement) {
+                  for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                    if (ssrDoc === mainSSR?.ownerDocument) continue;
+                    const mainSSRInDoc = ssrDoc.querySelector("main") || ssrDoc;
+                    const pathBasedElementInDoc = findElementByPath(mainSSRInDoc, path);
+                    if (pathBasedElementInDoc && blockName !== "header" && blockName !== "footer") {
+                      let current = pathBasedElementInDoc;
+                      let foundBlockElement = null;
+                      while (current && current !== mainSSRInDoc) {
+                        const classList2 = Array.from(current.classList || []);
+                        if (classList2.includes(blockName)) {
+                          foundBlockElement = current;
+                          break;
+                        }
+                        current = current.parentElement;
+                      }
+                      if (foundBlockElement) {
+                        ssrElement = foundBlockElement;
+                        console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, "via path-based search", ssrElement);
+                        break;
+                      }
+                    } else if (pathBasedElementInDoc) {
+                      ssrElement = pathBasedElementInDoc;
+                      console.log("[EDS Inspector] Found SSR element for", blockName, "in", url, "via path-based search", ssrElement);
+                      break;
+                    }
+                  }
                 }
               }
               if (!ssrElement) {

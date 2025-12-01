@@ -29,22 +29,21 @@ export function renderBlocks(state, refresh, tabId) {
     if (block.name === 'section') {
       return;
     }
+    // Blocks 一覧には Block だけを表示（button や icon は除外）
+    if (category !== 'block') {
+      return;
+    }
     if (!blocksByCategory[category]) {
       blocksByCategory[category] = [];
     }
     blocksByCategory[category].push(block);
   });
 
-  // カテゴリの順序を定義（Default Contentは除外）
-  const categoryOrder = ['block', 'button', 'icon'];
+  // Blocks 一覧には Block だけを表示
+  const categoryOrder = ['block'];
   
   categoryOrder.forEach((category) => {
     if (!blocksByCategory[category] || blocksByCategory[category].length === 0) return;
-    
-    const categoryTitle = document.createElement('h3');
-    categoryTitle.className = 'eds-category-title';
-    categoryTitle.textContent = category.charAt(0).toUpperCase() + category.slice(1);
-    root.appendChild(categoryTitle);
     
     const list = document.createElement('ul');
     list.className = 'eds-block-list';

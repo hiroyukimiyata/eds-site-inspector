@@ -166,7 +166,7 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
         
         // SSR要素を見つける（複数のSSRドキュメントから検索）
         let ssrElement = null;
-        if (mainSSR) {
+        if (ssrDocuments.size > 0) {
           try {
             // fragment ブロックの特別な処理
             if (blockName === 'fragment') {
@@ -238,10 +238,12 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
             }
             
             // ブロック名で見つからない場合、パスベースで検索を試す（フォールバック）
-            if (!ssrElement && mainLive.contains(liveElement)) {
+            // main ドキュメント以外のドキュメントも検索する
+            if (!ssrElement && mainLive.contains(liveElement) && mainSSR) {
               // ライブ要素からパスを計算
               const path = computeElementPath(liveElement, mainLive);
-              // SSR要素を見つける
+              
+              // まず main ドキュメントから検索
               const pathBasedElement = findElementByPath(mainSSR, path);
               
               // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
@@ -263,6 +265,40 @@ function detectBlocksFromResources(ssrDocuments, mainSSR, mainLive, blockResourc
                 }
               } else if (pathBasedElement) {
                 ssrElement = pathBasedElement;
+              }
+              
+              // main ドキュメントで見つからない場合、他のドキュメントも検索
+              if (!ssrElement) {
+                for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                  // main ドキュメントは既に検索済みなのでスキップ
+                  if (ssrDoc === mainSSR?.ownerDocument) continue;
+                  
+                  const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
+                  const pathBasedElementInDoc = findElementByPath(mainSSRInDoc, path);
+                  
+                  if (pathBasedElementInDoc && blockName !== 'header' && blockName !== 'footer') {
+                    let current = pathBasedElementInDoc;
+                    let foundBlockElement = null;
+                    // 親要素を遡ってブロッククラスを持つ要素を探す
+                    while (current && current !== mainSSRInDoc) {
+                      const classList = Array.from(current.classList || []);
+                      if (classList.includes(blockName)) {
+                        foundBlockElement = current;
+                        break;
+                      }
+                      current = current.parentElement;
+                    }
+                    if (foundBlockElement) {
+                      ssrElement = foundBlockElement;
+                      console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, 'via path-based search', ssrElement);
+                      break;
+                    }
+                  } else if (pathBasedElementInDoc) {
+                    ssrElement = pathBasedElementInDoc;
+                    console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, 'via path-based search', ssrElement);
+                    break;
+                  }
+                }
               }
             }
             
@@ -389,7 +425,7 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
         
         // SSR要素を見つける
         let ssrElement = null;
-        if (mainSSR) {
+        if (ssrDocuments.size > 0) {
           try {
             // まず、ブロック名で直接検索する方法を優先（より確実）
             const allLiveElements = Array.from(document.querySelectorAll(`.${escapeCSS(blockName)}`));
@@ -414,10 +450,12 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
             }
             
             // ブロック名で見つからない場合、パスベースで検索を試す（フォールバック）
-            if (!ssrElement && mainLive.contains(liveElement)) {
+            // main ドキュメント以外のドキュメントも検索する
+            if (!ssrElement && mainLive.contains(liveElement) && mainSSR) {
               // ライブ要素からパスを計算
               const path = computeElementPath(liveElement, mainLive);
-              // SSR要素を見つける
+              
+              // まず main ドキュメントから検索
               const pathBasedElement = findElementByPath(mainSSR, path);
               
               // パスベースで見つかった要素が、実際のブロック要素かどうかを確認
@@ -439,6 +477,40 @@ function detectBlocksFromSSR(ssrDocuments, mainSSR, mainLive, blockResources, bl
                 }
               } else if (pathBasedElement) {
                 ssrElement = pathBasedElement;
+              }
+              
+              // main ドキュメントで見つからない場合、他のドキュメントも検索
+              if (!ssrElement) {
+                for (const [url, ssrDoc] of ssrDocuments.entries()) {
+                  // main ドキュメントは既に検索済みなのでスキップ
+                  if (ssrDoc === mainSSR?.ownerDocument) continue;
+                  
+                  const mainSSRInDoc = ssrDoc.querySelector('main') || ssrDoc;
+                  const pathBasedElementInDoc = findElementByPath(mainSSRInDoc, path);
+                  
+                  if (pathBasedElementInDoc && blockName !== 'header' && blockName !== 'footer') {
+                    let current = pathBasedElementInDoc;
+                    let foundBlockElement = null;
+                    // 親要素を遡ってブロッククラスを持つ要素を探す
+                    while (current && current !== mainSSRInDoc) {
+                      const classList = Array.from(current.classList || []);
+                      if (classList.includes(blockName)) {
+                        foundBlockElement = current;
+                        break;
+                      }
+                      current = current.parentElement;
+                    }
+                    if (foundBlockElement) {
+                      ssrElement = foundBlockElement;
+                      console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, 'via path-based search', ssrElement);
+                      break;
+                    }
+                  } else if (pathBasedElementInDoc) {
+                    ssrElement = pathBasedElementInDoc;
+                    console.log('[EDS Inspector] Found SSR element for', blockName, 'in', url, 'via path-based search', ssrElement);
+                    break;
+                  }
+                }
               }
             }
             

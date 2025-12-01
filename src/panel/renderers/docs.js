@@ -17,7 +17,7 @@ let markupCache = {
 };
 
 // 現在のモード（'markdown' または 'markup'）
-let currentMode = 'markdown';
+let currentMode = 'markup';
 
 // 現在選択されているドキュメントURLを保持
 let currentSelectedDocUrl = null;
@@ -73,48 +73,109 @@ function renderSingleDoc(container, content, mode, tabId, isNested = false) {
 }
 
 /**
- * モード切り替えボタンを作成
+ * モード切り替えスイッチを作成（モダンなトグルUI）
  */
 function createModeToggle(root, tabId) {
   const toggleContainer = document.createElement('div');
-  toggleContainer.style.cssText = 'display: flex; gap: 8px; padding: 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
+  toggleContainer.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-muted); border-bottom: 1px solid var(--border);';
   
-  const markdownBtn = document.createElement('button');
-  markdownBtn.textContent = 'Markdown';
-  markdownBtn.className = 'eds-mode-toggle';
-  markdownBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.2s;';
+  // ラベル
+  const label = document.createElement('span');
+  label.textContent = 'View:';
+  label.style.cssText = 'font-size: 12px; color: var(--text-muted); font-weight: 500;';
+  
+  // スイッチコンテナ
+  const switchContainer = document.createElement('div');
+  switchContainer.style.cssText = 'position: relative; display: inline-flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 2px; cursor: pointer; transition: all 0.2s ease;';
+  
+  // ボタンコンテナ
+  const buttonsContainer = document.createElement('div');
+  buttonsContainer.style.cssText = 'position: relative; display: flex; z-index: 1;';
   
   const markupBtn = document.createElement('button');
   markupBtn.textContent = 'Markup';
-  markupBtn.className = 'eds-mode-toggle';
-  markupBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.2s;';
+  markupBtn.className = 'eds-mode-toggle-btn';
+  markupBtn.style.cssText = 'padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;';
   
-  const updateButtons = () => {
-    if (currentMode === 'markdown') {
-      markdownBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; transition: all 0.2s;';
-      markupBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.2s;';
+  const markdownBtn = document.createElement('button');
+  markdownBtn.textContent = 'Markdown';
+  markdownBtn.className = 'eds-mode-toggle-btn';
+  markdownBtn.style.cssText = 'padding: 6px 16px; border: none; background: transparent; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 500; transition: color 0.2s ease; border-radius: 6px; position: relative; z-index: 2; white-space: nowrap;';
+  
+  // スライダー（背景のハイライト）
+  const slider = document.createElement('div');
+  slider.style.cssText = 'position: absolute; top: 2px; left: 2px; height: calc(100% - 4px); background: #6366f1; border-radius: 6px; transition: all 0.2s ease; z-index: 0;';
+  
+  const updateSwitch = () => {
+    // ボタンの幅を取得してスライダーの幅と位置を計算
+    const markupWidth = markupBtn.offsetWidth;
+    const markdownWidth = markdownBtn.offsetWidth;
+    
+    if (currentMode === 'markup') {
+      slider.style.width = `${markupWidth}px`;
+      slider.style.transform = 'translateX(0)';
+      markupBtn.style.color = 'white';
+      markdownBtn.style.color = 'var(--text)';
     } else {
-      markdownBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 12px; transition: all 0.2s;';
-      markupBtn.style.cssText = 'padding: 6px 16px; border: 1px solid var(--border); border-radius: 4px; background: #6366f1; color: white; cursor: pointer; font-size: 12px; transition: all 0.2s;';
+      slider.style.width = `${markdownWidth}px`;
+      slider.style.transform = `translateX(${markupWidth}px)`;
+      markupBtn.style.color = 'var(--text)';
+      markdownBtn.style.color = 'white';
     }
   };
   
-  markdownBtn.addEventListener('click', async () => {
-    currentMode = 'markdown';
-    updateButtons();
-    await renderDocs(tabId);
-  });
+  // 初回レンダリング後にスイッチを更新（ボタンの幅が確定してから）
+  setTimeout(() => {
+    updateSwitch();
+  }, 0);
   
-  markupBtn.addEventListener('click', async () => {
+  markupBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (currentMode === 'markup') return;
     currentMode = 'markup';
-    updateButtons();
+    updateSwitch();
     await renderDocs(tabId);
   });
   
-  updateButtons();
+  markdownBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (currentMode === 'markdown') return;
+    currentMode = 'markdown';
+    updateSwitch();
+    await renderDocs(tabId);
+  });
   
-  toggleContainer.appendChild(markdownBtn);
-  toggleContainer.appendChild(markupBtn);
+  // コンテナ全体のクリックでも切り替え可能にする
+  switchContainer.addEventListener('click', async (e) => {
+    // ボタン自体のクリックは無視（既に処理済み）
+    if (e.target === markdownBtn || e.target === markupBtn) return;
+    currentMode = currentMode === 'markdown' ? 'markup' : 'markdown';
+    updateSwitch();
+    await renderDocs(tabId);
+  });
+  
+  buttonsContainer.appendChild(markupBtn);
+  buttonsContainer.appendChild(markdownBtn);
+  switchContainer.appendChild(slider);
+  switchContainer.appendChild(buttonsContainer);
+  
+  // 初回レンダリング後にスイッチを更新（ボタンの幅が確定してから）
+  setTimeout(() => {
+    updateSwitch();
+  }, 0);
+  
+  // ウィンドウリサイズ時にも更新
+  let resizeTimeout;
+  const resizeHandler = () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      updateSwitch();
+    }, 100);
+  };
+  window.addEventListener('resize', resizeHandler);
+  
+  toggleContainer.appendChild(label);
+  toggleContainer.appendChild(switchContainer);
   
   return toggleContainer;
 }
